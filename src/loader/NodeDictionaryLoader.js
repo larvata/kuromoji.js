@@ -18,7 +18,6 @@
 "use strict";
 
 var fs = require("fs");
-var node_zlib = require("zlib");
 var DictionaryLoader = require("./DictionaryLoader");
 
 /**
@@ -42,13 +41,7 @@ NodeDictionaryLoader.prototype.loadArrayBuffer = function (file, callback) {
         if(err) {
             return callback(err);
         }
-        node_zlib.gunzip(buffer, function (err2, decompressed) {
-            if(err2) {
-                return callback(err2);
-            }
-            var typed_array = new Uint8Array(decompressed);
-            callback(null, typed_array.buffer);
-        });
+        callback(null, buffer);
     });
 };
 

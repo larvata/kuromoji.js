@@ -143,7 +143,7 @@ gulp.task("clean-dat-files", (done) => {
 });
 
 gulp.task("build-dict", [ "build", "clean-dict" ], () => {
-    sequence("create-dat-files", "compress-dict", "clean-dat-files");
+    sequence("create-dat-files");
 });
 
 gulp.task("test", [ "build" ], () => {
