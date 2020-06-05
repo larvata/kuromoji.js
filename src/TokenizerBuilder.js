@@ -15,41 +15,39 @@
  * limitations under the License.
  */
 
-"use strict";
 
-var Tokenizer = require("./Tokenizer");
-var DictionaryLoader = require("./loader/NodeDictionaryLoader");
+const Tokenizer = require('./Tokenizer');
+const DictionaryLoader = require('./loader/NodeDictionaryLoader');
 
-/**
- * TokenizerBuilder create Tokenizer instance.
- * @param {Object} option JSON object which have key-value pairs settings
- * @param {string} option.dicPath Dictionary directory path (or URL using in browser)
- * @constructor
- */
-function TokenizerBuilder(option) {
-    if (option.dicPath == null) {
-        this.dic_path = "dict/";
-    } else {
-        this.dic_path = option.dicPath;
-    }
-}
 
-/**
- * Build Tokenizer instance by asynchronous manner
- * @param {TokenizerBuilder~onLoad} callback Callback function
- */
-TokenizerBuilder.prototype.build = function (callback) {
-    var loader = new DictionaryLoader(this.dic_path);
-    loader.load(function (err, dic) {
-        callback(err, new Tokenizer(dic));
+class TokenizerBuilder {
+  /**
+   * TokenizerBuilder create Tokenizer instance.
+   * @param {Object} option JSON object which have key-value pairs settings
+   * @param {string} option.dicPath Dictionary directory path (or URL using in browser)
+   * @constructor
+   */
+  constructor(option = {}) {
+    this.dic_path = option.dicPath || 'dict/';
+  }
+
+  /**
+   * Build Tokenizer instance by asynchronous manner
+   * @param {TokenizerBuilder~onLoad} callback Callback function
+   */
+  build(callback) {
+    const loader = new DictionaryLoader(this.dic_path);
+    loader.load((err, dic) => {
+      callback(err, new Tokenizer(dic));
     });
-};
+  }
 
-/**
- * Callback used by build
- * @callback TokenizerBuilder~onLoad
- * @param {Object} err Error object
- * @param {Tokenizer} tokenizer Prepared Tokenizer
- */
+  /**
+   * Callback used by build
+   * @callback TokenizerBuilder~onLoad
+   * @param {Object} err Error object
+   * @param {Tokenizer} tokenizer Prepared Tokenizer
+   */
+}
 
 module.exports = TokenizerBuilder;

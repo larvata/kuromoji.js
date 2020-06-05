@@ -15,77 +15,77 @@
  * limitations under the License.
  */
 
-"use strict";
 
-/**
- * String wrapper for UTF-16 surrogate pair (4 bytes)
- * @param {string} str String to wrap
- * @constructor
- */
-function SurrogateAwareString(str) {
+class SurrogateAwareString {
+  /**
+   * String wrapper for UTF-16 surrogate pair (4 bytes)
+   * @param {string} str String to wrap
+   * @constructor
+   */
+  constructor(str) {
     this.str = str;
     this.index_mapping = [];
 
-    for (var pos = 0; pos < str.length; pos++) {
-        var ch = str.charAt(pos);
-        this.index_mapping.push(pos);
-        if (SurrogateAwareString.isSurrogatePair(ch)) {
-            pos++;
-        }
+    for (let pos = 0; pos < str.length; pos += 1) {
+      const ch = str.charAt(pos);
+      this.index_mapping.push(pos);
+      if (SurrogateAwareString.isSurrogatePair(ch)) {
+        pos += 1;
+      }
     }
     // Surrogate aware length
     this.length = this.index_mapping.length;
-}
+  }
 
-SurrogateAwareString.prototype.slice = function (index) {
+  slice(index) {
     if (this.index_mapping.length <= index) {
-        return "";
+      return '';
     }
-    var surrogate_aware_index = this.index_mapping[index];
+    const surrogate_aware_index = this.index_mapping[index];
     return this.str.slice(surrogate_aware_index);
-};
+  }
 
-SurrogateAwareString.prototype.charAt = function (index) {
+  charAt(index) {
     if (this.str.length <= index) {
-        return "";
+      return '';
     }
-    var surrogate_aware_start_index = this.index_mapping[index];
-    var surrogate_aware_end_index = this.index_mapping[index + 1];
+    const surrogate_aware_start_index = this.index_mapping[index];
+    const surrogate_aware_end_index = this.index_mapping[index + 1];
 
     if (surrogate_aware_end_index == null) {
-        return this.str.slice(surrogate_aware_start_index);
+      return this.str.slice(surrogate_aware_start_index);
     }
     return this.str.slice(surrogate_aware_start_index, surrogate_aware_end_index);
-};
+  }
 
-SurrogateAwareString.prototype.charCodeAt = function (index) {
+  charCodeAt(index) {
     if (this.index_mapping.length <= index) {
-        return NaN;
+      return NaN;
     }
-    var surrogate_aware_index = this.index_mapping[index];
-    var upper = this.str.charCodeAt(surrogate_aware_index);
-    var lower;
+    const surrogate_aware_index = this.index_mapping[index];
+    const upper = this.str.charCodeAt(surrogate_aware_index);
     if (upper >= 0xD800 && upper <= 0xDBFF && surrogate_aware_index < this.str.length) {
-        lower = this.str.charCodeAt(surrogate_aware_index + 1);
-        if (lower >= 0xDC00 && lower <= 0xDFFF) {
-            return (upper - 0xD800) * 0x400 + lower - 0xDC00 + 0x10000;
-        }
+      const lower = this.str.charCodeAt(surrogate_aware_index + 1);
+      if (lower >= 0xDC00 && lower <= 0xDFFF) {
+        return (upper - 0xD800) * 0x400 + lower - 0xDC00 + 0x10000;
+      }
     }
     return upper;
-};
+  }
 
-SurrogateAwareString.prototype.toString = function () {
+  toString() {
     return this.str;
-};
+  }
 
-SurrogateAwareString.isSurrogatePair = function (ch) {
-    var utf16_code = ch.charCodeAt(0);
+  static isSurrogatePair(ch) {
+    const utf16_code = ch.charCodeAt(0);
     if (utf16_code >= 0xD800 && utf16_code <= 0xDBFF) {
-        // surrogate pair
-        return true;
-    } else {
-        return false;
+      // surrogate pair
+      return true;
     }
-};
+    return false;
+  }
+}
+
 
 module.exports = SurrogateAwareString;

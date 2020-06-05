@@ -15,40 +15,34 @@
  * limitations under the License.
  */
 
-"use strict";
 
-var fs = require("fs");
-var DictionaryLoader = require("./DictionaryLoader");
+const fs = require('fs');
+const DictionaryLoader = require('./DictionaryLoader');
 
-/**
- * NodeDictionaryLoader inherits DictionaryLoader
- * @param {string} dic_path Dictionary path
- * @constructor
- */
-function NodeDictionaryLoader(dic_path) {
-    DictionaryLoader.apply(this, [ dic_path ]);
+
+class NodeDictionaryLoader extends DictionaryLoader {
+  /**
+   * Utility function
+   * @param {string} file Dictionary file path
+   * @param {NodeDictionaryLoader~onLoad} callback Callback function
+   */
+  // eslint-disable-next-line class-methods-use-this
+  loadArrayBuffer(file, callback) {
+    // TODO investigate can this module rewroten in plain function
+    fs.readFile(file, (err, buffer) => {
+      if (err) {
+        return callback(err);
+      }
+      return callback(null, buffer.buffer);
+    });
+  }
+
+  /**
+   * @callback NodeDictionaryLoader~onLoad
+   * @param {Object} err Error object
+   * @param {Uint8Array} buffer Loaded buffer
+   */
 }
 
-NodeDictionaryLoader.prototype = Object.create(DictionaryLoader.prototype);
-
-/**
- * Utility function
- * @param {string} file Dictionary file path
- * @param {NodeDictionaryLoader~onLoad} callback Callback function
- */
-NodeDictionaryLoader.prototype.loadArrayBuffer = function (file, callback) {
-    fs.readFile(file, function (err, buffer) {
-        if(err) {
-            return callback(err);
-        }
-        callback(null, buffer.buffer);
-    });
-};
-
-/**
- * @callback NodeDictionaryLoader~onLoad
- * @param {Object} err Error object
- * @param {Uint8Array} buffer Loaded buffer
- */
 
 module.exports = NodeDictionaryLoader;

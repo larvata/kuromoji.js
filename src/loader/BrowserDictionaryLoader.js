@@ -15,48 +15,41 @@
  * limitations under the License.
  */
 
-"use strict";
+const DictionaryLoader = require('./DictionaryLoader');
 
-var DictionaryLoader = require("./DictionaryLoader");
 
-/**
- * BrowserDictionaryLoader inherits DictionaryLoader, using jQuery XHR for download
- * @param {string} dic_path Dictionary path
- * @constructor
- */
-function BrowserDictionaryLoader(dic_path) {
-    DictionaryLoader.apply(this, [dic_path]);
-}
-
-BrowserDictionaryLoader.prototype = Object.create(DictionaryLoader.prototype);
-
-/**
- * Utility function to load gzipped dictionary
- * @param {string} url Dictionary URL
- * @param {BrowserDictionaryLoader~onLoad} callback Callback function
- */
-BrowserDictionaryLoader.prototype.loadArrayBuffer = function (url, callback) {
-    var xhr = new XMLHttpRequest();
-    xhr.open("GET", url, true);
-    xhr.responseType = "arraybuffer";
+class BrowserDictionaryLoader extends DictionaryLoader {
+  /**
+   * Utility function to load gzipped dictionary
+   * @param {string} url Dictionary URL
+   * @param {BrowserDictionaryLoader~onLoad} callback Callback function
+   */
+  // eslint-disable-next-line class-methods-use-this
+  loadArrayBuffer(url, callback) {
+    // TODO use browser fetch
+    // TODO investigate can this module rewroten in plain function
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.responseType = 'arraybuffer';
     xhr.onload = function () {
-        if (this.status > 0 && this.status !== 200) {
-            callback(xhr.statusText, null);
-            return;
-        }
-        callback(null, this.response);
+      if (this.status > 0 && this.status !== 200) {
+        callback(xhr.statusText, null);
+        return;
+      }
+      callback(null, this.response);
     };
     xhr.onerror = function (err) {
-        callback(err, null);
+      callback(err, null);
     };
     xhr.send();
-};
+  }
 
-/**
- * Callback
- * @callback BrowserDictionaryLoader~onLoad
- * @param {Object} err Error object
- * @param {Uint8Array} buffer Loaded buffer
- */
+  /**
+   * Callback
+   * @callback BrowserDictionaryLoader~onLoad
+   * @param {Object} err Error object
+   * @param {Uint8Array} buffer Loaded buffer
+   */
+}
 
 module.exports = BrowserDictionaryLoader;

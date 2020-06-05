@@ -15,56 +15,59 @@
  * limitations under the License.
  */
 
-"use strict";
 
-var ConnectionCosts = require("../ConnectionCosts");
+const ConnectionCosts = require('../ConnectionCosts');
 
-/**
- * Builder class for constructing ConnectionCosts object
- * @constructor
- */
-function ConnectionCostsBuilder() {
+
+class ConnectionCostsBuilder {
+  /**
+   * Builder class for constructing ConnectionCosts object
+   * @constructor
+   */
+  constructor() {
     this.lines = 0;
     this.connection_cost = null;
-}
+  }
 
-ConnectionCostsBuilder.prototype.putLine = function (line) {
+  putLine(line) {
     if (this.lines === 0) {
-        var dimensions = line.split(" ");
-        var forward_dimension = dimensions[0];
-        var backward_dimension = dimensions[1];
+      const dimensions = line.split(' ');
+      const forward_dimension = dimensions[0];
+      const backward_dimension = dimensions[1];
 
-        if (forward_dimension < 0 || backward_dimension < 0) {
-            throw "Parse error of matrix.def";
-        }
+      if (forward_dimension < 0 || backward_dimension < 0) {
+        throw new Error('Parse error of matrix.def');
+      }
 
-        this.connection_cost = new ConnectionCosts(forward_dimension, backward_dimension);
-        this.lines++;
-        return this;
+      this.connection_cost = new ConnectionCosts(forward_dimension, backward_dimension);
+      this.lines += 1;
+      return this;
     }
 
-    var costs = line.split(" ");
+    const costs = line.split(' ');
 
     if (costs.length !== 3) {
-        return this;
+      return this;
     }
 
-    var forward_id = parseInt(costs[0]);
-    var backward_id = parseInt(costs[1]);
-    var cost = parseInt(costs[2]);
+    const forward_id = parseInt(costs[0], 10);
+    const backward_id = parseInt(costs[1], 10);
+    const cost = parseInt(costs[2], 10);
 
-    if (forward_id < 0 || backward_id < 0 || !isFinite(forward_id) || !isFinite(backward_id) ||
-        this.connection_cost.forward_dimension <= forward_id || this.connection_cost.backward_dimension <= backward_id) {
-        throw "Parse error of matrix.def";
+    if (forward_id < 0 || backward_id < 0 || !Number.isFinite(forward_id) || !Number.isFinite(backward_id) ||
+      this.connection_cost.forward_dimension <= forward_id || this.connection_cost.backward_dimension <= backward_id) {
+      throw new Error('Parse error of matrix.def');
     }
 
     this.connection_cost.put(forward_id, backward_id, cost);
-    this.lines++;
+    this.lines += 1;
     return this;
-};
+  }
 
-ConnectionCostsBuilder.prototype.build = function () {
+  build() {
     return this.connection_cost;
-};
+  }
+}
+
 
 module.exports = ConnectionCostsBuilder;

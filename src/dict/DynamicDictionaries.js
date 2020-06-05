@@ -15,68 +15,71 @@
  * limitations under the License.
  */
 
-"use strict";
 
-var doublearray = require("doublearray");
-var TokenInfoDictionary = require("./TokenInfoDictionary");
-var ConnectionCosts = require("./ConnectionCosts");
-var UnknownDictionary = require("./UnknownDictionary");
+const doublearray = require('doublearray');
+const TokenInfoDictionary = require('./TokenInfoDictionary');
+const ConnectionCosts = require('./ConnectionCosts');
+const UnknownDictionary = require('./UnknownDictionary');
 
-/**
- * Dictionaries container for Tokenizer
- * @param {DoubleArray} trie
- * @param {TokenInfoDictionary} token_info_dictionary
- * @param {ConnectionCosts} connection_costs
- * @param {UnknownDictionary} unknown_dictionary
- * @constructor
- */
-function DynamicDictionaries(trie, token_info_dictionary, connection_costs, unknown_dictionary) {
+
+class DynamicDictionaries {
+  /**
+   * Dictionaries container for Tokenizer
+   * @param {DoubleArray} trie
+   * @param {TokenInfoDictionary} token_info_dictionary
+   * @param {ConnectionCosts} connection_costs
+   * @param {UnknownDictionary} unknown_dictionary
+   * @constructor
+   */
+  constructor(trie, token_info_dictionary, connection_costs, unknown_dictionary) {
     if (trie != null) {
-        this.trie = trie;
+      this.trie = trie;
     } else {
-        this.trie = doublearray.builder(0).build([
-            {k: "", v: 1}
-        ]);
+      this.trie = doublearray.builder(0).build([
+        { k: '', v: 1 },
+      ]);
     }
     if (token_info_dictionary != null) {
-        this.token_info_dictionary = token_info_dictionary;
+      this.token_info_dictionary = token_info_dictionary;
     } else {
-        this.token_info_dictionary = new TokenInfoDictionary();
+      this.token_info_dictionary = new TokenInfoDictionary();
     }
     if (connection_costs != null) {
-        this.connection_costs = connection_costs;
+      this.connection_costs = connection_costs;
     } else {
-        // backward_size * backward_size
-        this.connection_costs = new ConnectionCosts(0, 0);
+      // backward_size * backward_size
+      this.connection_costs = new ConnectionCosts(0, 0);
     }
     if (unknown_dictionary != null) {
-        this.unknown_dictionary = unknown_dictionary;
+      this.unknown_dictionary = unknown_dictionary;
     } else {
-        this.unknown_dictionary = new UnknownDictionary();
+      this.unknown_dictionary = new UnknownDictionary();
     }
-}
+  }
 
-// from base.dat & check.dat
-DynamicDictionaries.prototype.loadTrie = function (base_buffer, check_buffer) {
+  // from base.dat & check.dat
+  loadTrie(base_buffer, check_buffer) {
     this.trie = doublearray.load(base_buffer, check_buffer);
     return this;
-};
+  }
 
-DynamicDictionaries.prototype.loadTokenInfoDictionaries = function (token_info_buffer, pos_buffer, target_map_buffer) {
+  loadTokenInfoDictionaries(token_info_buffer, pos_buffer, target_map_buffer) {
     this.token_info_dictionary.loadDictionary(token_info_buffer);
     this.token_info_dictionary.loadPosVector(pos_buffer);
     this.token_info_dictionary.loadTargetMap(target_map_buffer);
     return this;
-};
+  }
 
-DynamicDictionaries.prototype.loadConnectionCosts = function (cc_buffer) {
+  loadConnectionCosts(cc_buffer) {
     this.connection_costs.loadConnectionCosts(cc_buffer);
     return this;
-};
+  }
 
-DynamicDictionaries.prototype.loadUnknownDictionaries = function (unk_buffer, unk_pos_buffer, unk_map_buffer, cat_map_buffer, compat_cat_map_buffer, invoke_def_buffer) {
+  loadUnknownDictionaries(unk_buffer, unk_pos_buffer, unk_map_buffer, cat_map_buffer, compat_cat_map_buffer, invoke_def_buffer) {
     this.unknown_dictionary.loadUnknownDictionaries(unk_buffer, unk_pos_buffer, unk_map_buffer, cat_map_buffer, compat_cat_map_buffer, invoke_def_buffer);
     return this;
-};
+  }
+}
+
 
 module.exports = DynamicDictionaries;

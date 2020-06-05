@@ -6822,116 +6822,125 @@ process.umask = function() { return 0; };
  * limitations under the License.
  */
 
-"use strict";
 
-var ViterbiBuilder = require("./viterbi/ViterbiBuilder");
-var ViterbiSearcher = require("./viterbi/ViterbiSearcher");
-var IpadicFormatter = require("./util/IpadicFormatter");
+const ViterbiBuilder = require('./viterbi/ViterbiBuilder');
+const ViterbiSearcher = require('./viterbi/ViterbiSearcher');
+const IpadicFormatter = require('./util/IpadicFormatter');
 
-var PUNCTUATION = /、|。/;
+const PUNCTUATION = /、|。/;
 
-/**
- * Tokenizer
- * @param {DynamicDictionaries} dic Dictionaries used by this tokenizer
- * @constructor
- */
-function Tokenizer(dic) {
+
+class Tokenizer {
+  /**
+   * Tokenizer
+   * @param {DynamicDictionaries} dic Dictionaries used by this tokenizer
+   * @constructor
+   */
+  constructor(dic) {
     this.token_info_dictionary = dic.token_info_dictionary;
     this.unknown_dictionary = dic.unknown_dictionary;
     this.viterbi_builder = new ViterbiBuilder(dic);
     this.viterbi_searcher = new ViterbiSearcher(dic.connection_costs);
-    this.formatter = new IpadicFormatter();  // TODO Other dictionaries
-}
+    this.formatter = new IpadicFormatter(); // TODO Other dictionaries
+  }
 
-/**
- * Split into sentence by punctuation
- * @param {string} input Input text
- * @returns {Array.<string>} Sentences end with punctuation
- */
-Tokenizer.splitByPunctuation = function (input) {
-    var sentences = [];
-    var tail = input;
+  /**
+   * Tokenize text
+   * @param {string} text Input text to analyze
+   * @returns {Array} Tokens
+   */
+  tokenize(text) {
+    const sentences = Tokenizer.splitByPunctuation(text);
+    const tokens = [];
+    sentences.forEach((sentence) => {
+      this.tokenizeForSentence(sentence, tokens);
+    });
+    return tokens;
+  }
+
+  tokenizeForSentence(sentence, tokens = []) {
+    const lattice = this.getLattice(sentence);
+    const best_path = this.viterbi_searcher.search(lattice);
+    const last_pos = (tokens.length)
+      ? tokens[tokens.length - 1].word_position
+      : 0;
+
+    best_path.forEach((node) => {
+      let features = [];
+      let token = null;
+
+      // TODO extract node types
+      if (node.type === 'KNOWN') {
+        const features_line = this.token_info_dictionary.getFeatures(node.name);
+
+        if (features_line) {
+          features = features_line.split(',');
+        }
+
+        token = this.formatter.formatEntry(
+          node.name,
+          last_pos + node.start_pos,
+          node.type,
+          features
+        );
+      } else if (node.type === 'UNKNOWN') {
+        // Unknown word
+        const features_line = this.unknown_dictionary.getFeatures(node.name);
+        features = features_line.split(',');
+
+        token = this.formatter.formatUnknownEntry(
+          node.name,
+          last_pos + node.start_pos,
+          node.type,
+          features,
+          node.surface_form
+        );
+      } else {
+        // TODO User dictionary
+        token = this.formatter.formatEntry(node.name, last_pos + node.start_pos, node.type, []);
+      }
+
+      tokens.push(token);
+    });
+
+    return tokens;
+  }
+
+  /**
+   * Build word lattice
+   * @param {string} text Input text to analyze
+   * @returns {ViterbiLattice} Word lattice
+   */
+  getLattice(text) {
+    return this.viterbi_builder.build(text);
+  }
+
+
+  /**
+   * Split into sentence by punctuation
+   * @param {string} input Input text
+   * @returns {Array.<string>} Sentences end with punctuation
+   */
+  static splitByPunctuation(input) {
+    const sentences = [];
+    let tail = input;
+    // eslint-disable-next-line no-constant-condition
     while (true) {
-        if (tail === "") {
-            break;
-        }
-        var index = tail.search(PUNCTUATION);
-        if (index < 0) {
-            sentences.push(tail);
-            break;
-        }
-        sentences.push(tail.substring(0, index + 1));
-        tail = tail.substring(index + 1);
+      if (tail === '') {
+        break;
+      }
+      const index = tail.search(PUNCTUATION);
+      if (index < 0) {
+        sentences.push(tail);
+        break;
+      }
+      sentences.push(tail.substring(0, index + 1));
+      tail = tail.substring(index + 1);
     }
     return sentences;
-};
+  }
+}
 
-/**
- * Tokenize text
- * @param {string} text Input text to analyze
- * @returns {Array} Tokens
- */
-Tokenizer.prototype.tokenize = function (text) {
-    var sentences = Tokenizer.splitByPunctuation(text);
-    var tokens = [];
-    for (var i = 0; i < sentences.length; i++) {
-        var sentence = sentences[i];
-        this.tokenizeForSentence(sentence, tokens);
-    }
-    return tokens;
-};
-
-Tokenizer.prototype.tokenizeForSentence = function (sentence, tokens) {
-    if (tokens == null) {
-        tokens = [];
-    }
-    var lattice = this.getLattice(sentence);
-    var best_path = this.viterbi_searcher.search(lattice);
-    var last_pos = 0;
-    if (tokens.length > 0) {
-        last_pos = tokens[tokens.length - 1].word_position;
-    }
-
-    for (var j = 0; j < best_path.length; j++) {
-        var node = best_path[j];
-
-        var token, features, features_line;
-        if (node.type === "KNOWN") {
-            features_line = this.token_info_dictionary.getFeatures(node.name);
-            if (features_line == null) {
-                features = [];
-            } else {
-                features = features_line.split(",");
-            }
-            token = this.formatter.formatEntry(node.name, last_pos + node.start_pos, node.type, features);
-        } else if (node.type === "UNKNOWN") {
-            // Unknown word
-            features_line = this.unknown_dictionary.getFeatures(node.name);
-            if (features_line == null) {
-                features = [];
-            } else {
-                features = features_line.split(",");
-            }
-            token = this.formatter.formatUnknownEntry(node.name, last_pos + node.start_pos, node.type, features, node.surface_form);
-        } else {
-            // TODO User dictionary
-            token = this.formatter.formatEntry(node.name, last_pos + node.start_pos, node.type, []);
-        }
-
-        tokens.push(token);
-    }
-
-    return tokens;
-};
-
-/**
- * Build word lattice
- * @param {string} text Input text to analyze
- * @returns {ViterbiLattice} Word lattice
- */
-Tokenizer.prototype.getLattice = function (text) {
-    return this.viterbi_builder.build(text);
-};
 
 module.exports = Tokenizer;
 
@@ -6953,42 +6962,40 @@ module.exports = Tokenizer;
  * limitations under the License.
  */
 
-"use strict";
 
-var Tokenizer = require("./Tokenizer");
-var DictionaryLoader = require("./loader/NodeDictionaryLoader");
+const Tokenizer = require('./Tokenizer');
+const DictionaryLoader = require('./loader/NodeDictionaryLoader');
 
-/**
- * TokenizerBuilder create Tokenizer instance.
- * @param {Object} option JSON object which have key-value pairs settings
- * @param {string} option.dicPath Dictionary directory path (or URL using in browser)
- * @constructor
- */
-function TokenizerBuilder(option) {
-    if (option.dicPath == null) {
-        this.dic_path = "dict/";
-    } else {
-        this.dic_path = option.dicPath;
-    }
-}
 
-/**
- * Build Tokenizer instance by asynchronous manner
- * @param {TokenizerBuilder~onLoad} callback Callback function
- */
-TokenizerBuilder.prototype.build = function (callback) {
-    var loader = new DictionaryLoader(this.dic_path);
-    loader.load(function (err, dic) {
-        callback(err, new Tokenizer(dic));
+class TokenizerBuilder {
+  /**
+   * TokenizerBuilder create Tokenizer instance.
+   * @param {Object} option JSON object which have key-value pairs settings
+   * @param {string} option.dicPath Dictionary directory path (or URL using in browser)
+   * @constructor
+   */
+  constructor(option = {}) {
+    this.dic_path = option.dicPath || 'dict/';
+  }
+
+  /**
+   * Build Tokenizer instance by asynchronous manner
+   * @param {TokenizerBuilder~onLoad} callback Callback function
+   */
+  build(callback) {
+    const loader = new DictionaryLoader(this.dic_path);
+    loader.load((err, dic) => {
+      callback(err, new Tokenizer(dic));
     });
-};
+  }
 
-/**
- * Callback used by build
- * @callback TokenizerBuilder~onLoad
- * @param {Object} err Error object
- * @param {Tokenizer} tokenizer Prepared Tokenizer
- */
+  /**
+   * Callback used by build
+   * @callback TokenizerBuilder~onLoad
+   * @param {Object} err Error object
+   * @param {Tokenizer} tokenizer Prepared Tokenizer
+   */
+}
 
 module.exports = TokenizerBuilder;
 
@@ -7010,7 +7017,6 @@ module.exports = TokenizerBuilder;
  * limitations under the License.
  */
 
-"use strict";
 
 /**
  * CharacterClass
@@ -7022,11 +7028,11 @@ module.exports = TokenizerBuilder;
  * @constructor
  */
 function CharacterClass(class_id, class_name, is_always_invoke, is_grouping, max_length) {
-    this.class_id = class_id;
-    this.class_name = class_name;
-    this.is_always_invoke = is_always_invoke;
-    this.is_grouping = is_grouping;
-    this.max_length = max_length;
+  this.class_id = class_id;
+  this.class_name = class_name;
+  this.is_always_invoke = is_always_invoke;
+  this.is_grouping = is_grouping;
+  this.max_length = max_length;
 }
 
 module.exports = CharacterClass;
@@ -7049,192 +7055,219 @@ module.exports = CharacterClass;
  * limitations under the License.
  */
 
-"use strict";
 
-var InvokeDefinitionMap = require("./InvokeDefinitionMap");
-var CharacterClass = require("./CharacterClass");
-var SurrogateAwareString = require("../util/SurrogateAwareString");
+const InvokeDefinitionMap = require('./InvokeDefinitionMap');
+const CharacterClass = require('./CharacterClass');
+const SurrogateAwareString = require('../util/SurrogateAwareString');
 
-var DEFAULT_CATEGORY = "DEFAULT";
+const DEFAULT_CATEGORY = 'DEFAULT';
 
-/**
- * CharacterDefinition represents char.def file and
- * defines behavior of unknown word processing
- * @constructor
- */
-function CharacterDefinition() {
-    this.character_category_map = new Uint8Array(65536);  // for all UCS2 code points
-    this.compatible_category_map = new Uint32Array(65536);  // for all UCS2 code points
+
+class CharacterDefinition {
+  /**
+   * CharacterDefinition represents char.def file and
+   * defines behavior of unknown word processing
+   * @constructor
+   */
+  constructor() {
+    // for all UCS2 code points
+    this.character_category_map = new Uint8Array(65536);
+    // for all UCS2 code points
+    this.compatible_category_map = new Uint32Array(65536);
     this.invoke_definition_map = null;
-}
+  }
 
-/**
- * Load CharacterDefinition
- * @param {Uint8Array} cat_map_buffer
- * @param {Uint32Array} compat_cat_map_buffer
- * @param {InvokeDefinitionMap} invoke_def_buffer
- * @returns {CharacterDefinition}
- */
-CharacterDefinition.load = function (cat_map_buffer, compat_cat_map_buffer, invoke_def_buffer) {
-    var char_def = new CharacterDefinition();
+  /**
+   * Initializing method
+   * @param {Array} category_mapping Array of category mapping
+   */
+  initCategoryMappings(category_mapping) {
+    // Initialize map by DEFAULT class
+    let code_point;
+    if (category_mapping != null) {
+      for (let i = 0; i < category_mapping.length; i += 1) {
+        const mapping = category_mapping[i];
+        const end = mapping.end || mapping.start;
+        for (code_point = mapping.start; code_point <= end; code_point += 1) {
+          // Default Category class ID
+          this.character_category_map[code_point] = this.invoke_definition_map.lookup(mapping.default);
+
+          let bitset;
+          for (let j = 0; j < mapping.compatible.length; j += 1) {
+            bitset = this.compatible_category_map[code_point];
+            const compatible_category = mapping.compatible[j];
+            if (compatible_category == null) {
+              continue;
+            }
+            const class_id = this.invoke_definition_map.lookup(compatible_category);  // Default Category
+            if (class_id == null) {
+              continue;
+            }
+
+            // eslint-disable-next-line no-bitwise
+            const class_id_bit = 1 << class_id;
+
+            // Set a bit of class ID 例えば、class_idが3のとき、3ビット目に1を立てる
+            // eslint-disable-next-line no-bitwise, operator-assignment
+            bitset = bitset | class_id_bit;
+            this.compatible_category_map[code_point] = bitset;
+          }
+        }
+      }
+    }
+    const default_id = this.invoke_definition_map.lookup(DEFAULT_CATEGORY);
+    if (default_id == null) {
+      return;
+    }
+    for (code_point = 0; code_point < this.character_category_map.length; code_point += 1) {
+      // 他に何のクラスも定義されていなかったときだけ DEFAULT
+      if (this.character_category_map[code_point] === 0) {
+        // DEFAULT class ID に対応するビットだけ1を立てる
+        // eslint-disable-next-line no-bitwise
+        this.character_category_map[code_point] = 1 << default_id;
+      }
+    }
+  }
+
+  /**
+   * Lookup compatible categories for a character (not included 1st category)
+   * @param {string} ch UCS2 character (just 1st character is effective)
+   * @returns {Array.<CharacterClass>} character classes
+   */
+  lookupCompatibleCategory(ch) {
+    const classes = [];
+
+    // if (SurrogateAwareString.isSurrogatePair(ch)) {
+    //   // Surrogate pair character codes can not be defined by char.def
+    //   return classes;
+    // }
+
+    const code = ch.charCodeAt(0);
+    let integer;
+    if (code < this.compatible_category_map.length) {
+      // Bitset
+      integer = this.compatible_category_map[code];
+    }
+
+    if (integer == null || integer === 0) {
+      return classes;
+    }
+
+    for (let bit = 0; bit < 32; bit += 1) {
+      // Treat "bit" as a class ID
+      // eslint-disable-next-line no-bitwise
+      if (((integer << (31 - bit)) >>> 31) === 1) {
+        const character_class = this.invoke_definition_map.getCharacterClass(bit);
+        if (character_class == null) {
+          continue;
+        }
+        classes.push(character_class);
+      }
+    }
+    return classes;
+  }
+
+  /**
+   * Lookup category for a character
+   * @param {string} ch UCS2 character (just 1st character is effective)
+   * @returns {CharacterClass} character class
+   */
+  lookup(ch) {
+    let class_id;
+    const code = ch.charCodeAt(0);
+    if (SurrogateAwareString.isSurrogatePair(ch)) {
+      // Surrogate pair character codes can not be defined by char.def, so set DEFAULT category
+      class_id = this.invoke_definition_map.lookup(DEFAULT_CATEGORY);
+    } else if (code < this.character_category_map.length) {
+      // Read as integer value
+      class_id = this.character_category_map[code];
+    }
+
+    if (class_id == null) {
+      class_id = this.invoke_definition_map.lookup(DEFAULT_CATEGORY);
+    }
+
+    return this.invoke_definition_map.getCharacterClass(class_id);
+  }
+
+  /**
+   * Load CharacterDefinition
+   * @param {Uint8Array} cat_map_buffer
+   * @param {Uint32Array} compat_cat_map_buffer
+   * @param {InvokeDefinitionMap} invoke_def_buffer
+   * @returns {CharacterDefinition}
+   */
+  static load(cat_map_buffer, compat_cat_map_buffer, invoke_def_buffer) {
+    const char_def = new CharacterDefinition();
     char_def.character_category_map = cat_map_buffer;
     char_def.compatible_category_map = compat_cat_map_buffer;
     char_def.invoke_definition_map = InvokeDefinitionMap.load(invoke_def_buffer);
     return char_def;
-};
+  }
 
-CharacterDefinition.parseCharCategory = function (class_id, parsed_category_def) {
-    var category = parsed_category_def[1];
-    var invoke = parseInt(parsed_category_def[2]);
-    var grouping = parseInt(parsed_category_def[3]);
-    var max_length = parseInt(parsed_category_def[4]);
-    if (!isFinite(invoke) || (invoke !== 0 && invoke !== 1)) {
-        console.log("char.def parse error. INVOKE is 0 or 1 in:" + invoke);
-        return null;
+  static parseCharCategory(class_id, parsed_category_def) {
+    const category = parsed_category_def[1];
+    const invoke = parseInt(parsed_category_def[2], 10);
+    const grouping = parseInt(parsed_category_def[3], 10);
+    const max_length = parseInt(parsed_category_def[4], 10);
+    if (!Number.isFinite(invoke) || (invoke !== 0 && invoke !== 1)) {
+      console.log('char.def parse error. INVOKE is 0 or 1 in:', invoke);
+      return null;
     }
-    if (!isFinite(grouping) || (grouping !== 0 && grouping !== 1)) {
-        console.log("char.def parse error. GROUP is 0 or 1 in:" + grouping);
-        return null;
+    if (!Number.isFinite(grouping) || (grouping !== 0 && grouping !== 1)) {
+      console.log('char.def parse error. GROUP is 0 or 1 in:', grouping);
+      return null;
     }
-    if (!isFinite(max_length) || max_length < 0) {
-        console.log("char.def parse error. LENGTH is 1 to n:" + max_length);
-        return null;
+    if (!Number.isFinite(max_length) || max_length < 0) {
+      console.log('char.def parse error. LENGTH is 1 to n:', max_length);
+      return null;
     }
-    var is_invoke = (invoke === 1);
-    var is_grouping = (grouping === 1);
+    const is_invoke = (invoke === 1);
+    const is_grouping = (grouping === 1);
 
     return new CharacterClass(class_id, category, is_invoke, is_grouping, max_length);
-};
+  }
 
-CharacterDefinition.parseCategoryMapping = function (parsed_category_mapping) {
-    var start = parseInt(parsed_category_mapping[1]);
-    var default_category = parsed_category_mapping[2];
-    var compatible_category = (3 < parsed_category_mapping.length) ? parsed_category_mapping.slice(3) : [];
-    if (!isFinite(start) || start < 0 || start > 0xFFFF) {
-        console.log("char.def parse error. CODE is invalid:" + start);
+  static parseCategoryMapping(parsed_category_mapping) {
+    // TODO the parsed_category_mapping is hex cannot parse int as dec
+    const start = parseInt(parsed_category_mapping[1]);
+    const default_category = parsed_category_mapping[2];
+    const compatible_category = (parsed_category_mapping.length > 3)
+      ? parsed_category_mapping.slice(3)
+      : [];
+    if (!Number.isFinite(start) || start < 0 || start > 0xFFFF) {
+      console.log('char.def parse error. CODE is invalid:', start);
     }
-    return { start: start, default: default_category, compatible: compatible_category};
-};
+    return {
+      start,
+      default: default_category,
+      compatible: compatible_category,
+    };
+  }
 
-CharacterDefinition.parseRangeCategoryMapping = function (parsed_category_mapping) {
-    var start = parseInt(parsed_category_mapping[1]);
-    var end = parseInt(parsed_category_mapping[2]);
-    var default_category = parsed_category_mapping[3];
-    var compatible_category = (4 < parsed_category_mapping.length) ? parsed_category_mapping.slice(4) : [];
-    if (!isFinite(start) || start < 0 || start > 0xFFFF) {
-        console.log("char.def parse error. CODE is invalid:" + start);
+  static parseRangeCategoryMapping(parsed_category_mapping) {
+    // TODO the parsed_category_mapping is hex cannot parse int as dec
+    const start = parseInt(parsed_category_mapping[1]);
+    const end = parseInt(parsed_category_mapping[2]);
+    const default_category = parsed_category_mapping[3];
+    const compatible_category = (parsed_category_mapping.length > 4)
+      ? parsed_category_mapping.slice(4)
+      : [];
+    if (!Number.isFinite(start) || start < 0 || start > 0xFFFF) {
+      console.log('char.def parse error. CODE is invalid:', start);
     }
-    if (!isFinite(end) || end < 0 || end > 0xFFFF) {
-        console.log("char.def parse error. CODE is invalid:" + end);
+    if (!Number.isFinite(end) || end < 0 || end > 0xFFFF) {
+      console.log('char.def parse error. CODE is invalid:', end);
     }
-    return { start: start, end: end, default: default_category, compatible: compatible_category};
-};
+    return {
+      start,
+      end,
+      default: default_category,
+      compatible: compatible_category,
+    };
+  }
+}
 
-/**
- * Initializing method
- * @param {Array} category_mapping Array of category mapping
- */
-CharacterDefinition.prototype.initCategoryMappings = function (category_mapping) {
-    // Initialize map by DEFAULT class
-    var code_point;
-    if (category_mapping != null) {
-        for (var i = 0; i < category_mapping.length; i++) {
-            var mapping = category_mapping[i];
-            var end = mapping.end || mapping.start;
-            for (code_point = mapping.start; code_point <= end; code_point++) {
-
-                // Default Category class ID
-                this.character_category_map[code_point] = this.invoke_definition_map.lookup(mapping.default);
-
-                for (var j = 0; j < mapping.compatible.length; j++) {
-                    var bitset = this.compatible_category_map[code_point];
-                    var compatible_category = mapping.compatible[j];
-                    if (compatible_category == null) {
-                        continue;
-                    }
-                    var class_id = this.invoke_definition_map.lookup(compatible_category);  // Default Category
-                    if (class_id == null) {
-                        continue;
-                    }
-                    var class_id_bit = 1 << class_id;
-                    bitset = bitset | class_id_bit;  // Set a bit of class ID 例えば、class_idが3のとき、3ビット目に1を立てる
-                    this.compatible_category_map[code_point] = bitset;
-                }
-            }
-        }
-    }
-    var default_id = this.invoke_definition_map.lookup(DEFAULT_CATEGORY);
-    if (default_id == null) {
-        return;
-    }
-    for (code_point = 0; code_point < this.character_category_map.length; code_point++) {
-        // 他に何のクラスも定義されていなかったときだけ DEFAULT
-        if (this.character_category_map[code_point] === 0) {
-            // DEFAULT class ID に対応するビットだけ1を立てる
-            this.character_category_map[code_point] = 1 << default_id;
-        }
-    }
-};
-
-/**
- * Lookup compatible categories for a character (not included 1st category)
- * @param {string} ch UCS2 character (just 1st character is effective)
- * @returns {Array.<CharacterClass>} character classes
- */
-CharacterDefinition.prototype.lookupCompatibleCategory = function (ch) {
-    var classes = [];
-
-    /*
-     if (SurrogateAwareString.isSurrogatePair(ch)) {
-     // Surrogate pair character codes can not be defined by char.def
-     return classes;
-     }*/
-    var code = ch.charCodeAt(0);
-    var integer;
-    if (code < this.compatible_category_map.length) {
-        integer = this.compatible_category_map[code];  // Bitset
-    }
-
-    if (integer == null || integer === 0) {
-        return classes;
-    }
-
-    for (var bit = 0; bit < 32; bit++) {  // Treat "bit" as a class ID
-        if (((integer << (31 - bit)) >>> 31) === 1) {
-            var character_class = this.invoke_definition_map.getCharacterClass(bit);
-            if (character_class == null) {
-                continue;
-            }
-            classes.push(character_class);
-        }
-    }
-    return classes;
-};
-
-
-/**
- * Lookup category for a character
- * @param {string} ch UCS2 character (just 1st character is effective)
- * @returns {CharacterClass} character class
- */
-CharacterDefinition.prototype.lookup = function (ch) {
-
-    var class_id;
-
-    var code = ch.charCodeAt(0);
-    if (SurrogateAwareString.isSurrogatePair(ch)) {
-        // Surrogate pair character codes can not be defined by char.def, so set DEFAULT category
-        class_id = this.invoke_definition_map.lookup(DEFAULT_CATEGORY);
-    } else if (code < this.character_category_map.length) {
-        class_id = this.character_category_map[code];  // Read as integer value
-    }
-
-    if (class_id == null) {
-        class_id = this.invoke_definition_map.lookup(DEFAULT_CATEGORY);
-    }
-
-    return this.invoke_definition_map.getCharacterClass(class_id);
-};
 
 module.exports = CharacterDefinition;
 
@@ -7256,16 +7289,16 @@ module.exports = CharacterDefinition;
  * limitations under the License.
  */
 
-"use strict";
 
-/**
- * Connection costs matrix from cc.dat file.
- * 2 dimension matrix [forward_id][backward_id] -> cost
- * @constructor
- * @param {number} forward_dimension
- * @param {number} backward_dimension
- */
-function ConnectionCosts(forward_dimension, backward_dimension) {
+class ConnectionCosts {
+  /**
+   * Connection costs matrix from cc.dat file.
+   * 2 dimension matrix [forward_id][backward_id] -> cost
+   * @constructor
+   * @param {number} forward_dimension
+   * @param {number} backward_dimension
+   */
+  constructor(forward_dimension, backward_dimension) {
     this.forward_dimension = forward_dimension;
     this.backward_dimension = backward_dimension;
 
@@ -7273,29 +7306,34 @@ function ConnectionCosts(forward_dimension, backward_dimension) {
     this.buffer = new Int16Array(forward_dimension * backward_dimension + 2);
     this.buffer[0] = forward_dimension;
     this.buffer[1] = backward_dimension;
-}
+  }
 
-ConnectionCosts.prototype.put = function (forward_id, backward_id, cost) {
-    var index = forward_id * this.backward_dimension + backward_id + 2;
+  put(forward_id, backward_id, cost) {
+    const index = forward_id * this.backward_dimension + backward_id + 2;
     if (this.buffer.length < index + 1) {
-        throw "ConnectionCosts buffer overflow";
+      throw new Error('ConnectionCosts buffer overflow');
     }
     this.buffer[index] = cost;
-};
+  }
 
-ConnectionCosts.prototype.get = function (forward_id, backward_id) {
-    var index = forward_id * this.backward_dimension + backward_id + 2;
+  get(forward_id, backward_id) {
+    const index = forward_id * this.backward_dimension + backward_id + 2;
     if (this.buffer.length < index + 1) {
-        throw "ConnectionCosts buffer overflow";
+      throw new Error('ConnectionCosts buffer overflow');
     }
     return this.buffer[index];
-};
+  }
 
-ConnectionCosts.prototype.loadConnectionCosts = function (connection_costs_buffer) {
-    this.forward_dimension = connection_costs_buffer[0];
-    this.backward_dimension = connection_costs_buffer[1];
+  loadConnectionCosts(connection_costs_buffer) {
+    [
+      this.forward_dimension,
+      this.backward_dimension,
+    ] = connection_costs_buffer;
+
     this.buffer = connection_costs_buffer;
-};
+  }
+}
+
 
 module.exports = ConnectionCosts;
 
@@ -7317,69 +7355,72 @@ module.exports = ConnectionCosts;
  * limitations under the License.
  */
 
-"use strict";
 
-var doublearray = require("doublearray");
-var TokenInfoDictionary = require("./TokenInfoDictionary");
-var ConnectionCosts = require("./ConnectionCosts");
-var UnknownDictionary = require("./UnknownDictionary");
+const doublearray = require('doublearray');
+const TokenInfoDictionary = require('./TokenInfoDictionary');
+const ConnectionCosts = require('./ConnectionCosts');
+const UnknownDictionary = require('./UnknownDictionary');
 
-/**
- * Dictionaries container for Tokenizer
- * @param {DoubleArray} trie
- * @param {TokenInfoDictionary} token_info_dictionary
- * @param {ConnectionCosts} connection_costs
- * @param {UnknownDictionary} unknown_dictionary
- * @constructor
- */
-function DynamicDictionaries(trie, token_info_dictionary, connection_costs, unknown_dictionary) {
+
+class DynamicDictionaries {
+  /**
+   * Dictionaries container for Tokenizer
+   * @param {DoubleArray} trie
+   * @param {TokenInfoDictionary} token_info_dictionary
+   * @param {ConnectionCosts} connection_costs
+   * @param {UnknownDictionary} unknown_dictionary
+   * @constructor
+   */
+  constructor(trie, token_info_dictionary, connection_costs, unknown_dictionary) {
     if (trie != null) {
-        this.trie = trie;
+      this.trie = trie;
     } else {
-        this.trie = doublearray.builder(0).build([
-            {k: "", v: 1}
-        ]);
+      this.trie = doublearray.builder(0).build([
+        { k: '', v: 1 },
+      ]);
     }
     if (token_info_dictionary != null) {
-        this.token_info_dictionary = token_info_dictionary;
+      this.token_info_dictionary = token_info_dictionary;
     } else {
-        this.token_info_dictionary = new TokenInfoDictionary();
+      this.token_info_dictionary = new TokenInfoDictionary();
     }
     if (connection_costs != null) {
-        this.connection_costs = connection_costs;
+      this.connection_costs = connection_costs;
     } else {
-        // backward_size * backward_size
-        this.connection_costs = new ConnectionCosts(0, 0);
+      // backward_size * backward_size
+      this.connection_costs = new ConnectionCosts(0, 0);
     }
     if (unknown_dictionary != null) {
-        this.unknown_dictionary = unknown_dictionary;
+      this.unknown_dictionary = unknown_dictionary;
     } else {
-        this.unknown_dictionary = new UnknownDictionary();
+      this.unknown_dictionary = new UnknownDictionary();
     }
-}
+  }
 
-// from base.dat & check.dat
-DynamicDictionaries.prototype.loadTrie = function (base_buffer, check_buffer) {
+  // from base.dat & check.dat
+  loadTrie(base_buffer, check_buffer) {
     this.trie = doublearray.load(base_buffer, check_buffer);
     return this;
-};
+  }
 
-DynamicDictionaries.prototype.loadTokenInfoDictionaries = function (token_info_buffer, pos_buffer, target_map_buffer) {
+  loadTokenInfoDictionaries(token_info_buffer, pos_buffer, target_map_buffer) {
     this.token_info_dictionary.loadDictionary(token_info_buffer);
     this.token_info_dictionary.loadPosVector(pos_buffer);
     this.token_info_dictionary.loadTargetMap(target_map_buffer);
     return this;
-};
+  }
 
-DynamicDictionaries.prototype.loadConnectionCosts = function (cc_buffer) {
+  loadConnectionCosts(cc_buffer) {
     this.connection_costs.loadConnectionCosts(cc_buffer);
     return this;
-};
+  }
 
-DynamicDictionaries.prototype.loadUnknownDictionaries = function (unk_buffer, unk_pos_buffer, unk_map_buffer, cat_map_buffer, compat_cat_map_buffer, invoke_def_buffer) {
+  loadUnknownDictionaries(unk_buffer, unk_pos_buffer, unk_map_buffer, cat_map_buffer, compat_cat_map_buffer, invoke_def_buffer) {
     this.unknown_dictionary.loadUnknownDictionaries(unk_buffer, unk_pos_buffer, unk_map_buffer, cat_map_buffer, compat_cat_map_buffer, invoke_def_buffer);
     return this;
-};
+  }
+}
+
 
 module.exports = DynamicDictionaries;
 
@@ -7401,97 +7442,101 @@ module.exports = DynamicDictionaries;
  * limitations under the License.
  */
 
-"use strict";
 
-var ByteBuffer = require("../util/ByteBuffer");
-var CharacterClass = require("./CharacterClass");
+const ByteBuffer = require('../util/ByteBuffer');
+const CharacterClass = require('./CharacterClass');
 
-/**
- * InvokeDefinitionMap represents invoke definition a part of char.def
- * @constructor
- */
-function InvokeDefinitionMap() {
+class InvokeDefinitionMap {
+  /**
+   * InvokeDefinitionMap represents invoke definition a part of char.def
+   * @constructor
+   */
+  constructor() {
     this.map = [];
-    this.lookup_table = {};  // Just for building dictionary
-}
 
-/**
- * Load InvokeDefinitionMap from buffer
- * @param {Uint8Array} invoke_def_buffer
- * @returns {InvokeDefinitionMap}
- */
-InvokeDefinitionMap.load = function (invoke_def_buffer) {
-    var invoke_def = new InvokeDefinitionMap();
-    var character_category_definition = [];
+    // Just for building dictionary
+    this.lookup_table = {};
+  }
 
-    var buffer = new ByteBuffer(invoke_def_buffer);
+  /**
+   * Load InvokeDefinitionMap from buffer
+   * @param {Uint8Array} invoke_def_buffer
+   * @returns {InvokeDefinitionMap}
+   */
+  static load(invoke_def_buffer) {
+    const invoke_def = new InvokeDefinitionMap();
+    const character_category_definition = [];
+
+    const buffer = new ByteBuffer(invoke_def_buffer);
     while (buffer.position + 1 < buffer.size()) {
-        var class_id = character_category_definition.length;
-        var is_always_invoke = buffer.get();
-        var is_grouping = buffer.get();
-        var max_length = buffer.getInt();
-        var class_name = buffer.getString();
-        character_category_definition.push(new CharacterClass(class_id, class_name, is_always_invoke, is_grouping, max_length));
+      const class_id = character_category_definition.length;
+      const is_always_invoke = buffer.get();
+      const is_grouping = buffer.get();
+      const max_length = buffer.getInt();
+      const class_name = buffer.getString();
+      character_category_definition.push(new CharacterClass(class_id, class_name, is_always_invoke, is_grouping, max_length));
     }
 
     invoke_def.init(character_category_definition);
 
     return invoke_def;
-};
+  }
 
-/**
- * Initializing method
- * @param {Array.<CharacterClass>} character_category_definition Array of CharacterClass
- */
-InvokeDefinitionMap.prototype.init = function (character_category_definition) {
+  /**
+   * Initializing method
+   * @param {Array.<CharacterClass>} character_category_definition Array of CharacterClass
+   */
+  init(character_category_definition) {
     if (character_category_definition == null) {
-        return;
+      return;
     }
-    for (var i = 0; i < character_category_definition.length; i++) {
-        var character_class = character_category_definition[i];
-        this.map[i] = character_class;
-        this.lookup_table[character_class.class_name] = i;
+    for (let i = 0; i < character_category_definition.length; i += 1) {
+      const character_class = character_category_definition[i];
+      this.map[i] = character_class;
+      this.lookup_table[character_class.class_name] = i;
     }
-};
+  }
 
-/**
- * Get class information by class ID
- * @param {number} class_id
- * @returns {CharacterClass}
- */
-InvokeDefinitionMap.prototype.getCharacterClass = function (class_id) {
+  /**
+   * Get class information by class ID
+   * @param {number} class_id
+   * @returns {CharacterClass}
+   */
+  getCharacterClass(class_id) {
     return this.map[class_id];
-};
+  }
 
-/**
- * For building character definition dictionary
- * @param {string} class_name character
- * @returns {number} class_id
- */
-InvokeDefinitionMap.prototype.lookup = function (class_name) {
-    var class_id = this.lookup_table[class_name];
+  /**
+   * For building character definition dictionary
+   * @param {string} class_name character
+   * @returns {number} class_id
+   */
+  lookup(class_name) {
+    const class_id = this.lookup_table[class_name];
     if (class_id == null) {
-        return null;
+      return null;
     }
     return class_id;
-};
+  }
 
-/**
- * Transform from map to binary buffer
- * @returns {Uint8Array}
- */
-InvokeDefinitionMap.prototype.toBuffer = function () {
-    var buffer = new ByteBuffer();
-    for (var i = 0; i < this.map.length; i++) {
-        var char_class = this.map[i];
-        buffer.put(char_class.is_always_invoke);
-        buffer.put(char_class.is_grouping);
-        buffer.putInt(char_class.max_length);
-        buffer.putString(char_class.class_name);
+  /**
+   * Transform from map to binary buffer
+   * @returns {Uint8Array}
+   */
+  toBuffer() {
+    const buffer = new ByteBuffer();
+    for (let i = 0; i < this.map.length; i += 1) {
+      const char_class = this.map[i];
+      buffer.put(char_class.is_always_invoke);
+      buffer.put(char_class.is_grouping);
+      buffer.putInt(char_class.max_length);
+      buffer.putString(char_class.class_name);
     }
     buffer.shrink();
     return buffer.buffer;
-};
+  }
+}
+
 
 module.exports = InvokeDefinitionMap;
 
@@ -7513,45 +7558,51 @@ module.exports = InvokeDefinitionMap;
  * limitations under the License.
  */
 
-"use strict";
 
-var ByteBuffer = require("../util/ByteBuffer");
+const ByteBuffer = require('../util/ByteBuffer');
 
-/**
- * TokenInfoDictionary
- * @constructor
- */
-function TokenInfoDictionary() {
+
+class TokenInfoDictionary {
+  /**
+   * TokenInfoDictionary
+   * @constructor
+   */
+  constructor() {
     this.dictionary = new ByteBuffer(10 * 1024 * 1024);
-    this.target_map = {};  // trie_id (of surface form) -> token_info_id (of token)
+    // trie_id (of surface form) -> token_info_id (of token)
+    this.target_map = {};
     this.pos_buffer = new ByteBuffer(10 * 1024 * 1024);
-}
+  }
 
-// left_id right_id word_cost ...
-// ^ this position is token_info_id
-TokenInfoDictionary.prototype.buildDictionary = function (entries) {
-    var dictionary_entries = {};  // using as hashmap, string -> string (word_id -> surface_form) to build dictionary
+  // left_id right_id word_cost ...
+  // ^ this position is token_info_id
+  buildDictionary(entries) {
+    // using as hashmap, string -> string (word_id -> surface_form) to build dictionary
+    const dictionary_entries = {};
 
-    for (var i = 0; i < entries.length; i++) {
-        var entry = entries[i];
+    for (let i = 0; i < entries.length; i += 1) {
+      const entry = entries[i];
 
-        if (entry.length < 4) {
-            continue;
-        }
+      if (entry.length < 4) {
+        continue;
+      }
 
-        var surface_form = entry[0];
-        var left_id = entry[1];
-        var right_id = entry[2];
-        var word_cost = entry[3];
-        var feature = entry.slice(4).join(",");  // TODO Optimize
+      const [
+        surface_form,
+        left_id,
+        right_id,
+        word_cost,
+      ] = entry;
+      // TODO Optimize
+      const feature = entry.slice(4).join(',');
 
-        // Assertion
-        if (!isFinite(left_id) || !isFinite(right_id) || !isFinite(word_cost)) {
-            console.log(entry);
-        }
+      // Assertion
+      if (!Number.isFinite(left_id) || !Number.isFinite(right_id) || !Number.isFinite(word_cost)) {
+        console.log(entry);
+      }
 
-        var token_info_id = this.put(left_id, right_id, word_cost, surface_form, feature);
-        dictionary_entries[token_info_id] = surface_form;
+      const token_info_id = this.put(left_id, right_id, word_cost, surface_form, feature);
+      dictionary_entries[token_info_id] = surface_form;
     }
 
     // Remove last unused area
@@ -7559,93 +7610,98 @@ TokenInfoDictionary.prototype.buildDictionary = function (entries) {
     this.pos_buffer.shrink();
 
     return dictionary_entries;
-};
+  }
 
-TokenInfoDictionary.prototype.put = function (left_id, right_id, word_cost, surface_form, feature) {
-    var token_info_id = this.dictionary.position;
-    var pos_id = this.pos_buffer.position;
+  put(left_id, right_id, word_cost, surface_form, feature) {
+    const token_info_id = this.dictionary.position;
+    const pos_id = this.pos_buffer.position;
 
     this.dictionary.putShort(left_id);
     this.dictionary.putShort(right_id);
     this.dictionary.putShort(word_cost);
     this.dictionary.putInt(pos_id);
-    this.pos_buffer.putString(surface_form + "," + feature);
+    this.pos_buffer.putString(`${surface_form},${feature}`);
 
     return token_info_id;
-};
+  }
 
-TokenInfoDictionary.prototype.addMapping = function (source, target) {
-    var mapping = this.target_map[source];
-    if (mapping == null) {
-        mapping = [];
-    }
+  addMapping(source, target) {
+    const mapping = this.target_map[source] || [];
     mapping.push(target);
 
     this.target_map[source] = mapping;
-};
+  }
 
-TokenInfoDictionary.prototype.targetMapToBuffer = function () {
-    var buffer = new ByteBuffer();
-    var map_keys_size = Object.keys(this.target_map).length;
+  targetMapToBuffer() {
+    const buffer = new ByteBuffer();
+    const map_keys_size = Object.keys(this.target_map).length;
     buffer.putInt(map_keys_size);
-    for (var key in this.target_map) {
-        var values = this.target_map[key];  // Array
-        var map_values_size = values.length;
-        buffer.putInt(parseInt(key));
-        buffer.putInt(map_values_size);
-        for (var i = 0; i < values.length; i++) {
-            buffer.putInt(values[i]);
-        }
-    }
-    return buffer.shrink();  // Shrink-ed Typed Array
-};
 
-// from tid.dat
-TokenInfoDictionary.prototype.loadDictionary = function (array_buffer) {
+    // eslint-disable-next-line guard-for-in, no-restricted-syntax
+    for (const key in this.target_map) {
+      // Array
+      const values = this.target_map[key];
+      const map_values_size = values.length;
+      buffer.putInt(parseInt(key, 10));
+      buffer.putInt(map_values_size);
+      for (let i = 0; i < values.length; i += 1) {
+        buffer.putInt(values[i]);
+      }
+    }
+
+    // Shrink-ed Typed Array
+    return buffer.shrink();
+  }
+
+  // from tid.dat
+  loadDictionary(array_buffer) {
     this.dictionary = new ByteBuffer(array_buffer);
     return this;
-};
+  }
 
-// from tid_pos.dat
-TokenInfoDictionary.prototype.loadPosVector = function (array_buffer) {
+  // from tid_pos.dat
+  loadPosVector(array_buffer) {
     this.pos_buffer = new ByteBuffer(array_buffer);
     return this;
-};
+  }
 
-// from tid_map.dat
-TokenInfoDictionary.prototype.loadTargetMap = function (array_buffer) {
-    var buffer = new ByteBuffer(array_buffer);
+  // from tid_map.dat
+  loadTargetMap(array_buffer) {
+    const buffer = new ByteBuffer(array_buffer);
     buffer.position = 0;
     this.target_map = {};
-    buffer.readInt();  // map_keys_size
+    // map_keys_size
+    buffer.readInt();
     while (true) {
-        if (buffer.buffer.length < buffer.position + 1) {
-            break;
-        }
-        var key = buffer.readInt();
-        var map_values_size = buffer.readInt();
-        for (var i = 0; i < map_values_size; i++) {
-            var value = buffer.readInt();
-            this.addMapping(key, value);
-        }
+      if (buffer.buffer.length < buffer.position + 1) {
+        break;
+      }
+      const key = buffer.readInt();
+      const map_values_size = buffer.readInt();
+      for (let i = 0; i < map_values_size; i += 1) {
+        const value = buffer.readInt();
+        this.addMapping(key, value);
+      }
     }
     return this;
-};
+  }
 
-/**
- * Look up features in the dictionary
- * @param {string} token_info_id_str Word ID to look up
- * @returns {string} Features string concatenated by ","
- */
-TokenInfoDictionary.prototype.getFeatures = function (token_info_id_str) {
-    var token_info_id = parseInt(token_info_id_str);
-    if (isNaN(token_info_id)) {
-        // TODO throw error
-        return "";
+  /**
+   * Look up features in the dictionary
+   * @param {string} token_info_id_str Word ID to look up
+   * @returns {string} Features string concatenated by ","
+   */
+  getFeatures(token_info_id_str) {
+    const token_info_id = parseInt(token_info_id_str, 10);
+    if (Number.isNaN(token_info_id)) {
+      // TODO throw error
+      return '';
     }
-    var pos_id = this.dictionary.getInt(token_info_id + 6);
+    const pos_id = this.dictionary.getInt(token_info_id + 6);
     return this.pos_buffer.getString(pos_id);
-};
+  }
+}
+
 
 module.exports = TokenInfoDictionary;
 
@@ -7667,45 +7723,49 @@ module.exports = TokenInfoDictionary;
  * limitations under the License.
  */
 
-"use strict";
 
-var TokenInfoDictionary = require("./TokenInfoDictionary");
-var CharacterDefinition = require("./CharacterDefinition");
-var ByteBuffer = require("../util/ByteBuffer");
+const TokenInfoDictionary = require('./TokenInfoDictionary');
+const CharacterDefinition = require('./CharacterDefinition');
+const ByteBuffer = require('../util/ByteBuffer');
 
-/**
- * UnknownDictionary
- * @constructor
- */
-function UnknownDictionary() {
-    this.dictionary = new ByteBuffer(10 * 1024 * 1024);
-    this.target_map = {};  // class_id (of CharacterClass) -> token_info_id (of unknown class)
-    this.pos_buffer = new ByteBuffer(10 * 1024 * 1024);
-    this.character_definition = null;
-}
 
 // Inherit from TokenInfoDictionary as a super class
-UnknownDictionary.prototype = Object.create(TokenInfoDictionary.prototype);
+class UnknownDictionary extends TokenInfoDictionary {
+  /**
+   * UnknownDictionary
+   * @constructor
+   */
+  constructor() {
+    super();
 
-UnknownDictionary.prototype.characterDefinition = function (character_definition) {
+    this.dictionary = new ByteBuffer(10 * 1024 * 1024);
+    // class_id (of CharacterClass) -> token_info_id (of unknown class)
+    this.target_map = {};
+    this.pos_buffer = new ByteBuffer(10 * 1024 * 1024);
+    this.character_definition = null;
+  }
+
+  characterDefinition(character_definition) {
     this.character_definition = character_definition;
     return this;
-};
+  }
 
-UnknownDictionary.prototype.lookup = function (ch) {
+  lookup(ch) {
     return this.character_definition.lookup(ch);
-};
+  }
 
-UnknownDictionary.prototype.lookupCompatibleCategory = function (ch) {
+  lookupCompatibleCategory(ch) {
     return this.character_definition.lookupCompatibleCategory(ch);
-};
+  }
 
-UnknownDictionary.prototype.loadUnknownDictionaries = function (unk_buffer, unk_pos_buffer, unk_map_buffer, cat_map_buffer, compat_cat_map_buffer, invoke_def_buffer) {
+  loadUnknownDictionaries(unk_buffer, unk_pos_buffer, unk_map_buffer, cat_map_buffer, compat_cat_map_buffer, invoke_def_buffer) {
     this.loadDictionary(unk_buffer);
     this.loadPosVector(unk_pos_buffer);
     this.loadTargetMap(unk_map_buffer);
     this.character_definition = CharacterDefinition.load(cat_map_buffer, compat_cat_map_buffer, invoke_def_buffer);
-};
+  }
+}
+
 
 module.exports = UnknownDictionary;
 
@@ -7727,55 +7787,58 @@ module.exports = UnknownDictionary;
  * limitations under the License.
  */
 
-"use strict";
 
-var CharacterDefinition = require("../CharacterDefinition");
-var InvokeDefinitionMap = require("../InvokeDefinitionMap");
+const CharacterDefinition = require('../CharacterDefinition');
+const InvokeDefinitionMap = require('../InvokeDefinitionMap');
 
-var CATEGORY_DEF_PATTERN = /^(\w+)\s+(\d)\s+(\d)\s+(\d)/;
-var CATEGORY_MAPPING_PATTERN = /^(0x[0-9A-F]{4})(?:\s+([^#\s]+))(?:\s+([^#\s]+))*/;
-var RANGE_CATEGORY_MAPPING_PATTERN = /^(0x[0-9A-F]{4})\.\.(0x[0-9A-F]{4})(?:\s+([^#\s]+))(?:\s+([^#\s]+))*/;
+const CATEGORY_DEF_PATTERN = /^(\w+)\s+(\d)\s+(\d)\s+(\d)/;
+const CATEGORY_MAPPING_PATTERN = /^(0x[0-9A-F]{4})(?:\s+([^#\s]+))(?:\s+([^#\s]+))*/;
+const RANGE_CATEGORY_MAPPING_PATTERN = /^(0x[0-9A-F]{4})\.\.(0x[0-9A-F]{4})(?:\s+([^#\s]+))(?:\s+([^#\s]+))*/;
 
-/**
- * CharacterDefinitionBuilder
- * @constructor
- */
-function CharacterDefinitionBuilder() {
+
+class CharacterDefinitionBuilder {
+  /**
+   * CharacterDefinitionBuilder
+   * @constructor
+   */
+  constructor() {
     this.char_def = new CharacterDefinition();
     this.char_def.invoke_definition_map = new InvokeDefinitionMap();
     this.character_category_definition = [];
     this.category_mapping = [];
-}
+  }
 
-CharacterDefinitionBuilder.prototype.putLine = function (line) {
-    var parsed_category_def = CATEGORY_DEF_PATTERN.exec(line);
+  putLine(line) {
+    const parsed_category_def = CATEGORY_DEF_PATTERN.exec(line);
     if (parsed_category_def != null) {
-        var class_id = this.character_category_definition.length;
-        var char_class = CharacterDefinition.parseCharCategory(class_id, parsed_category_def);
-        if (char_class == null) {
-            return;
-        }
-        this.character_category_definition.push(char_class);
+      const class_id = this.character_category_definition.length;
+      const char_class = CharacterDefinition.parseCharCategory(class_id, parsed_category_def);
+      if (char_class == null) {
         return;
+      }
+      this.character_category_definition.push(char_class);
+      return;
     }
-    var parsed_category_mapping = CATEGORY_MAPPING_PATTERN.exec(line);
+    const parsed_category_mapping = CATEGORY_MAPPING_PATTERN.exec(line);
     if (parsed_category_mapping != null) {
-        var mapping = CharacterDefinition.parseCategoryMapping(parsed_category_mapping);
-        this.category_mapping.push(mapping);
+      const mapping = CharacterDefinition.parseCategoryMapping(parsed_category_mapping);
+      this.category_mapping.push(mapping);
     }
-    var parsed_range_category_mapping = RANGE_CATEGORY_MAPPING_PATTERN.exec(line);
+    const parsed_range_category_mapping = RANGE_CATEGORY_MAPPING_PATTERN.exec(line);
     if (parsed_range_category_mapping != null) {
-        var range_mapping = CharacterDefinition.parseRangeCategoryMapping(parsed_range_category_mapping);
-        this.category_mapping.push(range_mapping);
+      const range_mapping = CharacterDefinition.parseRangeCategoryMapping(parsed_range_category_mapping);
+      this.category_mapping.push(range_mapping);
     }
-};
+  }
 
-CharacterDefinitionBuilder.prototype.build = function () {
+  build() {
     // TODO If DEFAULT category does not exist, throw error
     this.char_def.invoke_definition_map.init(this.character_category_definition);
     this.char_def.initCategoryMappings(this.category_mapping);
     return this.char_def;
-};
+  }
+}
+
 
 module.exports = CharacterDefinitionBuilder;
 
@@ -7797,57 +7860,60 @@ module.exports = CharacterDefinitionBuilder;
  * limitations under the License.
  */
 
-"use strict";
 
-var ConnectionCosts = require("../ConnectionCosts");
+const ConnectionCosts = require('../ConnectionCosts');
 
-/**
- * Builder class for constructing ConnectionCosts object
- * @constructor
- */
-function ConnectionCostsBuilder() {
+
+class ConnectionCostsBuilder {
+  /**
+   * Builder class for constructing ConnectionCosts object
+   * @constructor
+   */
+  constructor() {
     this.lines = 0;
     this.connection_cost = null;
-}
+  }
 
-ConnectionCostsBuilder.prototype.putLine = function (line) {
+  putLine(line) {
     if (this.lines === 0) {
-        var dimensions = line.split(" ");
-        var forward_dimension = dimensions[0];
-        var backward_dimension = dimensions[1];
+      const dimensions = line.split(' ');
+      const forward_dimension = dimensions[0];
+      const backward_dimension = dimensions[1];
 
-        if (forward_dimension < 0 || backward_dimension < 0) {
-            throw "Parse error of matrix.def";
-        }
+      if (forward_dimension < 0 || backward_dimension < 0) {
+        throw new Error('Parse error of matrix.def');
+      }
 
-        this.connection_cost = new ConnectionCosts(forward_dimension, backward_dimension);
-        this.lines++;
-        return this;
+      this.connection_cost = new ConnectionCosts(forward_dimension, backward_dimension);
+      this.lines += 1;
+      return this;
     }
 
-    var costs = line.split(" ");
+    const costs = line.split(' ');
 
     if (costs.length !== 3) {
-        return this;
+      return this;
     }
 
-    var forward_id = parseInt(costs[0]);
-    var backward_id = parseInt(costs[1]);
-    var cost = parseInt(costs[2]);
+    const forward_id = parseInt(costs[0], 10);
+    const backward_id = parseInt(costs[1], 10);
+    const cost = parseInt(costs[2], 10);
 
-    if (forward_id < 0 || backward_id < 0 || !isFinite(forward_id) || !isFinite(backward_id) ||
-        this.connection_cost.forward_dimension <= forward_id || this.connection_cost.backward_dimension <= backward_id) {
-        throw "Parse error of matrix.def";
+    if (forward_id < 0 || backward_id < 0 || !Number.isFinite(forward_id) || !Number.isFinite(backward_id) ||
+      this.connection_cost.forward_dimension <= forward_id || this.connection_cost.backward_dimension <= backward_id) {
+      throw new Error('Parse error of matrix.def');
     }
 
     this.connection_cost.put(forward_id, backward_id, cost);
-    this.lines++;
+    this.lines += 1;
     return this;
-};
+  }
 
-ConnectionCostsBuilder.prototype.build = function () {
+  build() {
     return this.connection_cost;
-};
+  }
+}
+
 
 module.exports = ConnectionCostsBuilder;
 
@@ -7869,145 +7935,153 @@ module.exports = ConnectionCostsBuilder;
  * limitations under the License.
  */
 
-"use strict";
 
-var doublearray = require("doublearray");
-var DynamicDictionaries = require("../DynamicDictionaries");
-var TokenInfoDictionary = require("../TokenInfoDictionary");
-var ConnectionCostsBuilder = require("./ConnectionCostsBuilder");
-var CharacterDefinitionBuilder = require("./CharacterDefinitionBuilder");
-var UnknownDictionary = require("../UnknownDictionary");
+const doublearray = require('doublearray');
+const DynamicDictionaries = require('../DynamicDictionaries');
+const TokenInfoDictionary = require('../TokenInfoDictionary');
+const ConnectionCostsBuilder = require('./ConnectionCostsBuilder');
+const CharacterDefinitionBuilder = require('./CharacterDefinitionBuilder');
+const UnknownDictionary = require('../UnknownDictionary');
 
-/**
- * Build dictionaries (token info, connection costs)
- *
- * Generates from matrix.def
- * cc.dat: Connection costs
- *
- * Generates from *.csv
- * dat.dat: Double array
- * tid.dat: Token info dictionary
- * tid_map.dat: targetMap
- * tid_pos.dat: posList (part of speech)
- */
-function DictionaryBuilder() {
+
+class DictionaryBuilder {
+  /**
+   * Build dictionaries (token info, connection costs)
+   *
+   * Generates from matrix.def
+   * cc.dat: Connection costs
+   *
+   * Generates from *.csv
+   * dat.dat: Double array
+   * tid.dat: Token info dictionary
+   * tid_map.dat: targetMap
+   * tid_pos.dat: posList (part of speech)
+   */
+  constructor() {
     // Array of entries, each entry in Mecab form
     // (0: surface form, 1: left id, 2: right id, 3: word cost, 4: part of speech id, 5-: other features)
     this.tid_entries = [];
     this.unk_entries = [];
     this.cc_builder = new ConnectionCostsBuilder();
     this.cd_builder = new CharacterDefinitionBuilder();
-}
+  }
 
-DictionaryBuilder.prototype.addTokenInfoDictionary = function (line) {
-    var new_entry = line.split(",");
+  addTokenInfoDictionary(line) {
+    const new_entry = line.split(',');
     this.tid_entries.push(new_entry);
     return this;
-};
+  }
 
-/**
- * Put one line of "matrix.def" file for building ConnectionCosts object
- * @param {string} line is a line of "matrix.def"
- */
-DictionaryBuilder.prototype.putCostMatrixLine = function (line) {
+  /**
+   * Put one line of "matrix.def" file for building ConnectionCosts object
+   * @param {string} line is a line of "matrix.def"
+   */
+  putCostMatrixLine(line) {
     this.cc_builder.putLine(line);
     return this;
-};
+  }
 
-DictionaryBuilder.prototype.putCharDefLine = function (line) {
+  putCharDefLine(line) {
     this.cd_builder.putLine(line);
     return this;
-};
+  }
 
-/**
- * Put one line of "unk.def" file for building UnknownDictionary object
- * @param {string} line is a line of "unk.def"
- */
-DictionaryBuilder.prototype.putUnkDefLine = function (line) {
-    this.unk_entries.push(line.split(","));
+  /**
+   * Put one line of "unk.def" file for building UnknownDictionary object
+   * @param {string} line is a line of "unk.def"
+   */
+  putUnkDefLine(line) {
+    this.unk_entries.push(line.split(','));
     return this;
-};
+  }
 
-DictionaryBuilder.prototype.build = function () {
-    var dictionaries = this.buildTokenInfoDictionary();
-    var unknown_dictionary = this.buildUnknownDictionary();
+  build() {
+    const dictionaries = this.buildTokenInfoDictionary();
+    const unknown_dictionary = this.buildUnknownDictionary();
 
     return new DynamicDictionaries(dictionaries.trie, dictionaries.token_info_dictionary, this.cc_builder.build(), unknown_dictionary);
-};
+  }
 
-/**
- * Build TokenInfoDictionary
- *
- * @returns {{trie: *, token_info_dictionary: *}}
- */
-DictionaryBuilder.prototype.buildTokenInfoDictionary = function () {
-
-    var token_info_dictionary = new TokenInfoDictionary();
+  /**
+   * Build TokenInfoDictionary
+   *
+   * @returns {{trie: *, token_info_dictionary: *}}
+   */
+  buildTokenInfoDictionary() {
+    const token_info_dictionary = new TokenInfoDictionary();
 
     // using as hashmap, string -> string (word_id -> surface_form) to build dictionary
-    var dictionary_entries = token_info_dictionary.buildDictionary(this.tid_entries);
+    const dictionary_entries = token_info_dictionary.buildDictionary(this.tid_entries);
 
-    var trie = this.buildDoubleArray();
+    const trie = this.buildDoubleArray();
 
-    for (var token_info_id in dictionary_entries) {
-        var surface_form = dictionary_entries[token_info_id];
-        var trie_id = trie.lookup(surface_form);
+    // eslint-disable-next-line guard-for-in, no-restricted-syntax
+    for (const token_info_id in dictionary_entries) {
+      const surface_form = dictionary_entries[token_info_id];
+      const trie_id = trie.lookup(surface_form);
 
-        // Assertion
-        // if (trie_id < 0) {
-        //     console.log("Not Found:" + surface_form);
-        // }
+      // Assertion
+      // if (trie_id < 0) {
+      //     console.log("Not Found:" + surface_form);
+      // }
 
-        token_info_dictionary.addMapping(trie_id, token_info_id);
+      token_info_dictionary.addMapping(trie_id, token_info_id);
     }
 
     return {
-        trie: trie,
-        token_info_dictionary: token_info_dictionary
+      trie,
+      token_info_dictionary,
     };
-};
+  }
 
-DictionaryBuilder.prototype.buildUnknownDictionary = function () {
-
-    var unk_dictionary = new UnknownDictionary();
+  buildUnknownDictionary() {
+    const unk_dictionary = new UnknownDictionary();
 
     // using as hashmap, string -> string (word_id -> surface_form) to build dictionary
-    var dictionary_entries = unk_dictionary.buildDictionary(this.unk_entries);
+    const dictionary_entries = unk_dictionary.buildDictionary(this.unk_entries);
 
-    var char_def = this.cd_builder.build(); // Create CharacterDefinition
+    const char_def = this.cd_builder.build(); // Create CharacterDefinition
 
     unk_dictionary.characterDefinition(char_def);
 
-    for (var token_info_id in dictionary_entries) {
-        var class_name = dictionary_entries[token_info_id];
-        var class_id = char_def.invoke_definition_map.lookup(class_name);
+    // eslint-disable-next-line guard-for-in, no-restricted-syntax
+    for (const token_info_id in dictionary_entries) {
+      const class_name = dictionary_entries[token_info_id];
+      const class_id = char_def.invoke_definition_map.lookup(class_name);
 
-        // Assertion
-        // if (trie_id < 0) {
-        //     console.log("Not Found:" + surface_form);
-        // }
+      // Assertion
+      // if (trie_id < 0) {
+      //     console.log("Not Found:" + surface_form);
+      // }
 
-        unk_dictionary.addMapping(class_id, token_info_id);
+      unk_dictionary.addMapping(class_id, token_info_id);
     }
 
     return unk_dictionary;
-};
+  }
 
-/**
- * Build double array trie
- *
- * @returns {DoubleArray} Double-Array trie
- */
-DictionaryBuilder.prototype.buildDoubleArray = function () {
-    var trie_id = 0;
-    var words = this.tid_entries.map(function (entry) {
-        var surface_form = entry[0];
-        return { k: surface_form, v: trie_id++ };
+  /**
+   * Build double array trie
+   *
+   * @returns {DoubleArray} Double-Array trie
+   */
+  buildDoubleArray() {
+    let trie_id = 0;
+    const words = this.tid_entries.map((entry) => {
+      const surface_form = entry[0];
+      // TODO replace trie_id by using map index
+      // eslint-disable-next-line no-return-assign
+      return {
+        k: surface_form,
+        v: (trie_id += 1),
+      };
     });
 
-    var builder = doublearray.builder(1024 * 1024);
+    const builder = doublearray.builder(1024 * 1024);
     return builder.build(words);
-};
+  }
+}
+
 
 module.exports = DictionaryBuilder;
 
@@ -8029,19 +8103,18 @@ module.exports = DictionaryBuilder;
  * limitations under the License.
  */
 
-"use strict";
 
-var TokenizerBuilder = require("./TokenizerBuilder");
-var DictionaryBuilder = require("./dict/builder/DictionaryBuilder");
+const TokenizerBuilder = require('./TokenizerBuilder');
+const DictionaryBuilder = require('./dict/builder/DictionaryBuilder');
 
 // Public methods
-var kuromoji = {
-    builder: function (option) {
-        return new TokenizerBuilder(option);
-    },
-    dictionaryBuilder: function () {
-        return new DictionaryBuilder();
-    }
+const kuromoji = {
+  builder(option) {
+    return new TokenizerBuilder(option);
+  },
+  dictionaryBuilder() {
+    return new DictionaryBuilder();
+  },
 };
 
 module.exports = kuromoji;
@@ -8064,49 +8137,42 @@ module.exports = kuromoji;
  * limitations under the License.
  */
 
-"use strict";
+const DictionaryLoader = require('./DictionaryLoader');
 
-var DictionaryLoader = require("./DictionaryLoader");
 
-/**
- * BrowserDictionaryLoader inherits DictionaryLoader, using jQuery XHR for download
- * @param {string} dic_path Dictionary path
- * @constructor
- */
-function BrowserDictionaryLoader(dic_path) {
-    DictionaryLoader.apply(this, [dic_path]);
-}
-
-BrowserDictionaryLoader.prototype = Object.create(DictionaryLoader.prototype);
-
-/**
- * Utility function to load gzipped dictionary
- * @param {string} url Dictionary URL
- * @param {BrowserDictionaryLoader~onLoad} callback Callback function
- */
-BrowserDictionaryLoader.prototype.loadArrayBuffer = function (url, callback) {
-    var xhr = new XMLHttpRequest();
-    xhr.open("GET", url, true);
-    xhr.responseType = "arraybuffer";
+class BrowserDictionaryLoader extends DictionaryLoader {
+  /**
+   * Utility function to load gzipped dictionary
+   * @param {string} url Dictionary URL
+   * @param {BrowserDictionaryLoader~onLoad} callback Callback function
+   */
+  // eslint-disable-next-line class-methods-use-this
+  loadArrayBuffer(url, callback) {
+    // TODO use browser fetch
+    // TODO investigate can this module rewroten in plain function
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.responseType = 'arraybuffer';
     xhr.onload = function () {
-        if (this.status > 0 && this.status !== 200) {
-            callback(xhr.statusText, null);
-            return;
-        }
-        callback(null, this.response);
+      if (this.status > 0 && this.status !== 200) {
+        callback(xhr.statusText, null);
+        return;
+      }
+      callback(null, this.response);
     };
     xhr.onerror = function (err) {
-        callback(err, null);
+      callback(err, null);
     };
     xhr.send();
-};
+  }
 
-/**
- * Callback
- * @callback BrowserDictionaryLoader~onLoad
- * @param {Object} err Error object
- * @param {Uint8Array} buffer Loaded buffer
- */
+  /**
+   * Callback
+   * @callback BrowserDictionaryLoader~onLoad
+   * @param {Object} err Error object
+   * @param {Uint8Array} buffer Loaded buffer
+   */
+}
 
 module.exports = BrowserDictionaryLoader;
 
@@ -8128,124 +8194,123 @@ module.exports = BrowserDictionaryLoader;
  * limitations under the License.
  */
 
-"use strict";
 
-var path = require("path");
-var async = require("async");
-var DynamicDictionaries = require("../dict/DynamicDictionaries");
+const path = require('path');
+const async = require('async');
+const DynamicDictionaries = require('../dict/DynamicDictionaries');
 
-/**
- * DictionaryLoader base constructor
- * @param {string} dic_path Dictionary path
- * @constructor
- */
-function DictionaryLoader(dic_path) {
+// TODO this class should be used as a base class
+// TODO rename to DictionaryLoaderBase
+// TODO replace async with es6 Promise
+class DictionaryLoader {
+  /**
+   * DictionaryLoader base constructor
+   * @param {string} dic_path Dictionary path
+   * @constructor
+   */
+  constructor(dic_path) {
     this.dic = new DynamicDictionaries();
     this.dic_path = dic_path;
-}
+  }
 
-DictionaryLoader.prototype.loadArrayBuffer = function (file, callback) {
-    throw new Error("DictionaryLoader#loadArrayBuffer should be overwrite");
-};
-
-/**
- * Load dictionary files
- * @param {DictionaryLoader~onLoad} load_callback Callback function called after loaded
- */
-DictionaryLoader.prototype.load = function (load_callback) {
-    var dic = this.dic;
-    var dic_path = this.dic_path;
-    var loadArrayBuffer = this.loadArrayBuffer;
+  /**
+   * Load dictionary files
+   * @param {DictionaryLoader~onLoad} load_callback Callback function called after loaded
+   */
+  load(load_callback) {
+    const { dic, dic_path, loadArrayBuffer } = this;
 
     async.parallel([
-        // Trie
-        function (callback) {
-            async.map([ "base.dat", "check.dat" ], function (filename, _callback) {
-                loadArrayBuffer(path.join(dic_path, filename), function (err, buffer) {
-                    if(err) {
-                        return _callback(err);
-                    }
-                    _callback(null, buffer);
-                });
-            }, function (err, buffers) {
-                if(err) {
-                    return callback(err);
-                }
-                var base_buffer = new Int32Array(buffers[0]);
-                var check_buffer = new Int32Array(buffers[1]);
+      // Trie
+      (callback) => {
+        async.map(['base.dat', 'check.dat'], (filename, _callback) => {
+          loadArrayBuffer(path.join(dic_path, filename), (err, buffer) => {
+            if (err) {
+              return _callback(err);
+            }
+            _callback(null, buffer);
+          });
+        }, (err, buffers) => {
+          if (err) {
+            return callback(err);
+          }
+          const base_buffer = new Int32Array(buffers[0]);
+          const check_buffer = new Int32Array(buffers[1]);
 
-                dic.loadTrie(base_buffer, check_buffer);
-                callback(null);
-            });
-        },
-        // Token info dictionaries
-        function (callback) {
-            async.map([ "tid.dat", "tid_pos.dat", "tid_map.dat" ], function (filename, _callback) {
-                loadArrayBuffer(path.join(dic_path, filename), function (err, buffer) {
-                    if(err) {
-                        return _callback(err);
-                    }
-                    _callback(null, buffer);
-                });
-            }, function (err, buffers) {
-                if(err) {
-                    return callback(err);
-                }
-                var token_info_buffer = new Uint8Array(buffers[0]);
-                var pos_buffer = new Uint8Array(buffers[1]);
-                var target_map_buffer = new Uint8Array(buffers[2]);
+          dic.loadTrie(base_buffer, check_buffer);
+          return callback(null);
+        });
+      },
+      // Token info dictionaries
+      (callback) => {
+        async.map(['tid.dat', 'tid_pos.dat', 'tid_map.dat'], (filename, _callback) => {
+          loadArrayBuffer(path.join(dic_path, filename), (err, buffer) => {
+            if (err) {
+              return _callback(err);
+            }
+            _callback(null, buffer);
+          });
+        }, (err, buffers) => {
+          if (err) {
+            return callback(err);
+          }
+          const token_info_buffer = new Uint8Array(buffers[0]);
+          const pos_buffer = new Uint8Array(buffers[1]);
+          const target_map_buffer = new Uint8Array(buffers[2]);
 
-                dic.loadTokenInfoDictionaries(token_info_buffer, pos_buffer, target_map_buffer);
-                callback(null);
-            });
-        },
-        // Connection cost matrix
-        function (callback) {
-            loadArrayBuffer(path.join(dic_path, "cc.dat"), function (err, buffer) {
-                if(err) {
-                    return callback(err);
-                }
-                var cc_buffer = new Int16Array(buffer);
-                dic.loadConnectionCosts(cc_buffer);
-                callback(null);
-            });
-        },
-        // Unknown dictionaries
-        function (callback) {
-            async.map([ "unk.dat", "unk_pos.dat", "unk_map.dat", "unk_char.dat", "unk_compat.dat", "unk_invoke.dat" ], function (filename, _callback) {
-                loadArrayBuffer(path.join(dic_path, filename), function (err, buffer) {
-                    if(err) {
-                        return _callback(err);
-                    }
-                    _callback(null, buffer);
-                });
-            }, function (err, buffers) {
-                if(err) {
-                    return callback(err);
-                }
-                var unk_buffer = new Uint8Array(buffers[0]);
-                var unk_pos_buffer = new Uint8Array(buffers[1]);
-                var unk_map_buffer = new Uint8Array(buffers[2]);
-                var cat_map_buffer = new Uint8Array(buffers[3]);
-                var compat_cat_map_buffer = new Uint32Array(buffers[4]);
-                var invoke_def_buffer = new Uint8Array(buffers[5]);
+          dic.loadTokenInfoDictionaries(token_info_buffer, pos_buffer, target_map_buffer);
+          return callback(null);
+        });
+      },
+      // Connection cost matrix
+      (callback) => {
+        loadArrayBuffer(path.join(dic_path, 'cc.dat'), (err, buffer) => {
+          if (err) {
+            return callback(err);
+          }
+          const cc_buffer = new Int16Array(buffer);
+          dic.loadConnectionCosts(cc_buffer);
+          return callback(null);
+        });
+      },
+      // Unknown dictionaries
+      (callback) => {
+        async.map(['unk.dat', 'unk_pos.dat', 'unk_map.dat', 'unk_char.dat', 'unk_compat.dat', 'unk_invoke.dat'], (filename, _callback) => {
+          loadArrayBuffer(path.join(dic_path, filename), (err, buffer) => {
+            if (err) {
+              return _callback(err);
+            }
+            return _callback(null, buffer);
+          });
+        }, (err, buffers) => {
+          if (err) {
+            return callback(err);
+          }
+          const unk_buffer = new Uint8Array(buffers[0]);
+          const unk_pos_buffer = new Uint8Array(buffers[1]);
+          const unk_map_buffer = new Uint8Array(buffers[2]);
+          const cat_map_buffer = new Uint8Array(buffers[3]);
+          const compat_cat_map_buffer = new Uint32Array(buffers[4]);
+          const invoke_def_buffer = new Uint8Array(buffers[5]);
 
-                dic.loadUnknownDictionaries(unk_buffer, unk_pos_buffer, unk_map_buffer, cat_map_buffer, compat_cat_map_buffer, invoke_def_buffer);
-                // dic.loadUnknownDictionaries(char_buffer, unk_buffer);
-                callback(null);
-            });
-        }
-    ], function (err) {
-        load_callback(err, dic);
+          dic.loadUnknownDictionaries(unk_buffer, unk_pos_buffer, unk_map_buffer, cat_map_buffer, compat_cat_map_buffer, invoke_def_buffer);
+          // dic.loadUnknownDictionaries(char_buffer, unk_buffer);
+          return callback(null);
+        });
+      },
+    ], (err) => {
+      load_callback(err, dic);
     });
-};
+  }
 
-/**
- * Callback
- * @callback DictionaryLoader~onLoad
- * @param {Object} err Error object
- * @param {DynamicDictionaries} dic Loaded dictionary
- */
+  /**
+   * Callback
+   * @callback DictionaryLoader~onLoad
+   * @param {Object} err Error object
+   * @param {DynamicDictionaries} dic Loaded dictionary
+   */
+}
+
 
 module.exports = DictionaryLoader;
 
@@ -8558,54 +8623,61 @@ module.exports = ByteBuffer;
  * limitations under the License.
  */
 
-"use strict";
 
 /**
  * Mappings between IPADIC dictionary features and tokenized results
  * @constructor
  */
-function IpadicFormatter() {
-}
-
-IpadicFormatter.prototype.formatEntry = function (word_id, position, type, features) {
-    var token = {};
+// TODO use as plain module rather than class
+class IpadicFormatter {
+  // eslint-disable-next-line class-methods-use-this
+  formatEntry(word_id, position, type, features) {
+    const token = {};
     token.word_id = word_id;
     token.word_type = type;
     token.word_position = position;
 
-    token.surface_form = features[0];
-    token.pos = features[1];
-    token.pos_detail_1 = features[2];
-    token.pos_detail_2 = features[3];
-    token.pos_detail_3 = features[4];
-    token.conjugated_type = features[5];
-    token.conjugated_form = features[6];
-    token.basic_form = features[7];
-    token.reading = features[8];
-    token.pronunciation = features[9];
+    [
+      token.surface_form,
+      token.pos,
+      token.pos_detail_1,
+      token.pos_detail_2,
+      token.pos_detail_3,
+      token.conjugated_type,
+      token.conjugated_form,
+      token.basic_form,
+      token.reading,
+      token.pronunciation,
+    ] = features;
 
     return token;
-};
+  }
 
-IpadicFormatter.prototype.formatUnknownEntry = function (word_id, position, type, features, surface_form) {
-    var token = {};
+  // eslint-disable-next-line class-methods-use-this
+  formatUnknownEntry(word_id, position, type, features, surface_form) {
+    const token = {};
     token.word_id = word_id;
     token.word_type = type;
     token.word_position = position;
 
     token.surface_form = surface_form;
-    token.pos = features[1];
-    token.pos_detail_1 = features[2];
-    token.pos_detail_2 = features[3];
-    token.pos_detail_3 = features[4];
-    token.conjugated_type = features[5];
-    token.conjugated_form = features[6];
-    token.basic_form = features[7];
-    // token.reading = features[8];
-    // token.pronunciation = features[9];
+
+    [,
+      token.pos,
+      token.pos_detail_1,
+      token.pos_detail_2,
+      token.pos_detail_3,
+      token.conjugated_type,
+      token.conjugated_form,
+      token.basic_form,
+      // token.reading,
+      // token.pronunciation,
+    ] = features;
 
     return token;
-};
+  }
+}
+
 
 module.exports = IpadicFormatter;
 
@@ -8627,78 +8699,78 @@ module.exports = IpadicFormatter;
  * limitations under the License.
  */
 
-"use strict";
 
-/**
- * String wrapper for UTF-16 surrogate pair (4 bytes)
- * @param {string} str String to wrap
- * @constructor
- */
-function SurrogateAwareString(str) {
+class SurrogateAwareString {
+  /**
+   * String wrapper for UTF-16 surrogate pair (4 bytes)
+   * @param {string} str String to wrap
+   * @constructor
+   */
+  constructor(str) {
     this.str = str;
     this.index_mapping = [];
 
-    for (var pos = 0; pos < str.length; pos++) {
-        var ch = str.charAt(pos);
-        this.index_mapping.push(pos);
-        if (SurrogateAwareString.isSurrogatePair(ch)) {
-            pos++;
-        }
+    for (let pos = 0; pos < str.length; pos += 1) {
+      const ch = str.charAt(pos);
+      this.index_mapping.push(pos);
+      if (SurrogateAwareString.isSurrogatePair(ch)) {
+        pos += 1;
+      }
     }
     // Surrogate aware length
     this.length = this.index_mapping.length;
-}
+  }
 
-SurrogateAwareString.prototype.slice = function (index) {
+  slice(index) {
     if (this.index_mapping.length <= index) {
-        return "";
+      return '';
     }
-    var surrogate_aware_index = this.index_mapping[index];
+    const surrogate_aware_index = this.index_mapping[index];
     return this.str.slice(surrogate_aware_index);
-};
+  }
 
-SurrogateAwareString.prototype.charAt = function (index) {
+  charAt(index) {
     if (this.str.length <= index) {
-        return "";
+      return '';
     }
-    var surrogate_aware_start_index = this.index_mapping[index];
-    var surrogate_aware_end_index = this.index_mapping[index + 1];
+    const surrogate_aware_start_index = this.index_mapping[index];
+    const surrogate_aware_end_index = this.index_mapping[index + 1];
 
     if (surrogate_aware_end_index == null) {
-        return this.str.slice(surrogate_aware_start_index);
+      return this.str.slice(surrogate_aware_start_index);
     }
     return this.str.slice(surrogate_aware_start_index, surrogate_aware_end_index);
-};
+  }
 
-SurrogateAwareString.prototype.charCodeAt = function (index) {
+  charCodeAt(index) {
     if (this.index_mapping.length <= index) {
-        return NaN;
+      return NaN;
     }
-    var surrogate_aware_index = this.index_mapping[index];
-    var upper = this.str.charCodeAt(surrogate_aware_index);
-    var lower;
+    const surrogate_aware_index = this.index_mapping[index];
+    const upper = this.str.charCodeAt(surrogate_aware_index);
     if (upper >= 0xD800 && upper <= 0xDBFF && surrogate_aware_index < this.str.length) {
-        lower = this.str.charCodeAt(surrogate_aware_index + 1);
-        if (lower >= 0xDC00 && lower <= 0xDFFF) {
-            return (upper - 0xD800) * 0x400 + lower - 0xDC00 + 0x10000;
-        }
+      const lower = this.str.charCodeAt(surrogate_aware_index + 1);
+      if (lower >= 0xDC00 && lower <= 0xDFFF) {
+        return (upper - 0xD800) * 0x400 + lower - 0xDC00 + 0x10000;
+      }
     }
     return upper;
-};
+  }
 
-SurrogateAwareString.prototype.toString = function () {
+  toString() {
     return this.str;
-};
+  }
 
-SurrogateAwareString.isSurrogatePair = function (ch) {
-    var utf16_code = ch.charCodeAt(0);
+  static isSurrogatePair(ch) {
+    const utf16_code = ch.charCodeAt(0);
     if (utf16_code >= 0xD800 && utf16_code <= 0xDBFF) {
-        // surrogate pair
-        return true;
-    } else {
-        return false;
+      // surrogate pair
+      return true;
     }
-};
+    return false;
+  }
+}
+
 
 module.exports = SurrogateAwareString;
 
@@ -8720,88 +8792,90 @@ module.exports = SurrogateAwareString;
  * limitations under the License.
  */
 
-"use strict";
 
-var ViterbiNode = require("./ViterbiNode");
-var ViterbiLattice = require("./ViterbiLattice");
-var SurrogateAwareString = require("../util/SurrogateAwareString");
+const ViterbiNode = require('./ViterbiNode');
+const ViterbiLattice = require('./ViterbiLattice');
+const SurrogateAwareString = require('../util/SurrogateAwareString');
 
-/**
- * ViterbiBuilder builds word lattice (ViterbiLattice)
- * @param {DynamicDictionaries} dic dictionary
- * @constructor
- */
-function ViterbiBuilder(dic) {
+class ViterbiBuilder {
+  /**
+   * ViterbiBuilder builds word lattice (ViterbiLattice)
+   * @param {DynamicDictionaries} dic dictionary
+   * @constructor
+   */
+  constructor(dic) {
     this.trie = dic.trie;
     this.token_info_dictionary = dic.token_info_dictionary;
     this.unknown_dictionary = dic.unknown_dictionary;
-}
+  }
 
-/**
- * Build word lattice
- * @param {string} sentence_str Input text
- * @returns {ViterbiLattice} Word lattice
- */
-ViterbiBuilder.prototype.build = function (sentence_str) {
-    var lattice = new ViterbiLattice();
-    var sentence = new SurrogateAwareString(sentence_str);
+  /**
+   * Build word lattice
+   * @param {string} sentence_str Input text
+   * @returns {ViterbiLattice} Word lattice
+   */
+  build(sentence_str) {
+    const lattice = new ViterbiLattice();
+    const sentence = new SurrogateAwareString(sentence_str);
 
-    var key, trie_id, left_id, right_id, word_cost;
-    for (var pos = 0; pos < sentence.length; pos++) {
-        var tail = sentence.slice(pos);
-        var vocabulary = this.trie.commonPrefixSearch(tail);
-        for (var n = 0; n < vocabulary.length; n++) {  // Words in dictionary do not have surrogate pair (only UCS2 set)
-            trie_id = vocabulary[n].v;
-            key = vocabulary[n].k;
+    for (let pos = 0; pos < sentence.length; pos += 1) {
+      const tail = sentence.slice(pos);
+      const vocabulary = this.trie.commonPrefixSearch(tail);
+      for (let n = 0; n < vocabulary.length; n += 1) {
+        // Words in dictionary do not have surrogate pair (only UCS2 set)
+        const trie_id = vocabulary[n].v;
+        const key = vocabulary[n].k;
 
-            var token_info_ids = this.token_info_dictionary.target_map[trie_id];
-            for (var i = 0; i < token_info_ids.length; i++) {
-                var token_info_id = parseInt(token_info_ids[i]);
+        const token_info_ids = this.token_info_dictionary.target_map[trie_id];
+        for (let i = 0; i < token_info_ids.length; i += 1) {
+          const token_info_id = parseInt(token_info_ids[i], 10);
 
-                left_id = this.token_info_dictionary.dictionary.getShort(token_info_id);
-                right_id = this.token_info_dictionary.dictionary.getShort(token_info_id + 2);
-                word_cost = this.token_info_dictionary.dictionary.getShort(token_info_id + 4);
+          const left_id = this.token_info_dictionary.dictionary.getShort(token_info_id);
+          const right_id = this.token_info_dictionary.dictionary.getShort(token_info_id + 2);
+          const word_cost = this.token_info_dictionary.dictionary.getShort(token_info_id + 4);
 
-                // node_name, cost, start_index, length, type, left_id, right_id, surface_form
-                lattice.append(new ViterbiNode(token_info_id, word_cost, pos + 1, key.length, "KNOWN", left_id, right_id, key));
+          // node_name, cost, start_index, length, type, left_id, right_id, surface_form
+          lattice.append(new ViterbiNode(token_info_id, word_cost, pos + 1, key.length, 'KNOWN', left_id, right_id, key));
+        }
+      }
+
+      // Unknown word processing
+      const surrogate_aware_tail = new SurrogateAwareString(tail);
+      const head_char = new SurrogateAwareString(surrogate_aware_tail.charAt(0));
+      const head_char_class = this.unknown_dictionary.lookup(head_char.toString());
+      if (vocabulary == null || vocabulary.length === 0 || head_char_class.is_always_invoke === 1) {
+        // Process unknown word
+        let key = head_char;
+        if (head_char_class.is_grouping === 1 && surrogate_aware_tail.length > 1) {
+          for (let k = 1; k < surrogate_aware_tail.length; k += 1) {
+            const next_char = surrogate_aware_tail.charAt(k);
+            const next_char_class = this.unknown_dictionary.lookup(next_char);
+            if (head_char_class.class_name !== next_char_class.class_name) {
+              break;
             }
+            key += next_char;
+          }
         }
 
-        // Unknown word processing
-        var surrogate_aware_tail = new SurrogateAwareString(tail);
-        var head_char = new SurrogateAwareString(surrogate_aware_tail.charAt(0));
-        var head_char_class = this.unknown_dictionary.lookup(head_char.toString());
-        if (vocabulary == null || vocabulary.length === 0 || head_char_class.is_always_invoke === 1) {
-            // Process unknown word
-            key = head_char;
-            if (head_char_class.is_grouping === 1 && 1 < surrogate_aware_tail.length) {
-                for (var k = 1; k < surrogate_aware_tail.length; k++) {
-                    var next_char = surrogate_aware_tail.charAt(k);
-                    var next_char_class = this.unknown_dictionary.lookup(next_char);
-                    if (head_char_class.class_name !== next_char_class.class_name) {
-                        break;
-                    }
-                    key += next_char;
-                }
-            }
+        const unk_ids = this.unknown_dictionary.target_map[head_char_class.class_id];
+        for (let j = 0; j < unk_ids.length; j += 1) {
+          const unk_id = parseInt(unk_ids[j], 10);
 
-            var unk_ids = this.unknown_dictionary.target_map[head_char_class.class_id];
-            for (var j = 0; j < unk_ids.length; j++) {
-                var unk_id = parseInt(unk_ids[j]);
+          const left_id = this.unknown_dictionary.dictionary.getShort(unk_id);
+          const right_id = this.unknown_dictionary.dictionary.getShort(unk_id + 2);
+          const word_cost = this.unknown_dictionary.dictionary.getShort(unk_id + 4);
 
-                left_id = this.unknown_dictionary.dictionary.getShort(unk_id);
-                right_id = this.unknown_dictionary.dictionary.getShort(unk_id + 2);
-                word_cost = this.unknown_dictionary.dictionary.getShort(unk_id + 4);
-
-                // node_name, cost, start_index, length, type, left_id, right_id, surface_form
-                lattice.append(new ViterbiNode(unk_id, word_cost, pos + 1, key.length, "UNKNOWN", left_id, right_id, key.toString()));
-            }
+          // node_name, cost, start_index, length, type, left_id, right_id, surface_form
+          lattice.append(new ViterbiNode(unk_id, word_cost, pos + 1, key.length, 'UNKNOWN', left_id, right_id, key.toString()));
         }
+      }
     }
     lattice.appendEos();
 
     return lattice;
-};
+  }
+}
+
 
 module.exports = ViterbiBuilder;
 
@@ -8823,47 +8897,46 @@ module.exports = ViterbiBuilder;
  * limitations under the License.
  */
 
-"use strict";
 
-var ViterbiNode = require("./ViterbiNode");
+const ViterbiNode = require('./ViterbiNode');
 
-/**
- * ViterbiLattice is a lattice in Viterbi algorithm
- * @constructor
- */
-function ViterbiLattice() {
+class ViterbiLattice {
+  /**
+   * ViterbiLattice is a lattice in Viterbi algorithm
+   * @constructor
+   */
+  constructor() {
     this.nodes_end_at = [];
-    this.nodes_end_at[0] = [ new ViterbiNode(-1, 0, 0, 0, "BOS", 0, 0, "") ];
+    this.nodes_end_at[0] = [new ViterbiNode(-1, 0, 0, 0, 'BOS', 0, 0, '')];
     this.eos_pos = 1;
-}
+  }
 
-/**
- * Append node to ViterbiLattice
- * @param {ViterbiNode} node
- */
-ViterbiLattice.prototype.append = function (node) {
-    var last_pos = node.start_pos + node.length - 1;
+  /**
+   * Append node to ViterbiLattice
+   * @param {ViterbiNode} node
+   */
+  append(node) {
+    const last_pos = node.start_pos + node.length - 1;
     if (this.eos_pos < last_pos) {
-        this.eos_pos = last_pos;
+      this.eos_pos = last_pos;
     }
 
-    var prev_nodes = this.nodes_end_at[last_pos];
-    if (prev_nodes == null) {
-        prev_nodes = [];
-    }
+    const prev_nodes = this.nodes_end_at[last_pos] || [];
     prev_nodes.push(node);
 
     this.nodes_end_at[last_pos] = prev_nodes;
-};
+  }
 
-/**
- * Set ends with EOS (End of Statement)
- */
-ViterbiLattice.prototype.appendEos = function () {
-    var last_index = this.nodes_end_at.length;
-    this.eos_pos++;
-    this.nodes_end_at[last_index] = [ new ViterbiNode(-1, 0, this.eos_pos, 0, "EOS", 0, 0, "") ];
-};
+  /**
+   * Set ends with EOS (End of Statement)
+   */
+  appendEos() {
+    const last_index = this.nodes_end_at.length;
+    this.eos_pos += 1;
+    this.nodes_end_at[last_index] = [new ViterbiNode(-1, 0, this.eos_pos, 0, 'EOS', 0, 0, '')];
+  }
+}
+
 
 module.exports = ViterbiLattice;
 
@@ -8885,7 +8958,6 @@ module.exports = ViterbiLattice;
  * limitations under the License.
  */
 
-"use strict";
 
 /**
  * ViterbiNode is a node of ViterbiLattice
@@ -8899,21 +8971,30 @@ module.exports = ViterbiLattice;
  * @param {string} surface_form Surface form of this word
  * @constructor
  */
-function ViterbiNode(node_name, node_cost, start_pos, length, type, left_id, right_id, surface_form) {
-    this.name = node_name;
-    this.cost = node_cost;
-    this.start_pos = start_pos;
-    this.length = length;
-    this.left_id = left_id;
-    this.right_id = right_id;
-    this.prev = null;
-    this.surface_form = surface_form;
-    if (type === "BOS") {
-        this.shortest_cost = 0;
-    } else {
-        this.shortest_cost = Number.MAX_VALUE;
-    }
-    this.type = type;
+function ViterbiNode(
+  node_name,
+  node_cost,
+  start_pos,
+  length,
+  type,
+  left_id,
+  right_id,
+  surface_form,
+) {
+  this.name = node_name;
+  this.cost = node_cost;
+  this.start_pos = start_pos;
+  this.length = length;
+  this.left_id = left_id;
+  this.right_id = right_id;
+  this.prev = null;
+  this.surface_form = surface_form;
+  if (type === 'BOS') {
+    this.shortest_cost = 0;
+  } else {
+    this.shortest_cost = Number.MAX_VALUE;
+  }
+  this.type = type;
 }
 
 module.exports = ViterbiNode;
@@ -8936,89 +9017,92 @@ module.exports = ViterbiNode;
  * limitations under the License.
  */
 
-"use strict";
-
-/**
- * ViterbiSearcher is for searching best Viterbi path
- * @param {ConnectionCosts} connection_costs Connection costs matrix
- * @constructor
- */
-function ViterbiSearcher(connection_costs) {
+class ViterbiSearcher {
+  /**
+   * ViterbiSearcher is for searching best Viterbi path
+   * @param {ConnectionCosts} connection_costs Connection costs matrix
+   * @constructor
+   */
+  constructor(connection_costs) {
     this.connection_costs = connection_costs;
-}
+  }
 
-/**
- * Search best path by forward-backward algorithm
- * @param {ViterbiLattice} lattice Viterbi lattice to search
- * @returns {Array} Shortest path
- */
-ViterbiSearcher.prototype.search = function (lattice) {
-    lattice = this.forward(lattice);
-    return this.backward(lattice);
-};
+  /**
+   * Search best path by forward-backward algorithm
+   * @param {ViterbiLattice} lattice Viterbi lattice to search
+   * @returns {Array} Shortest path
+   */
+  search(lattice) {
+    const forwardLattice = this.forward(lattice);
+    return this.backward(forwardLattice);
+  }
 
-ViterbiSearcher.prototype.forward = function (lattice) {
-    var i, j, k;
-    for (i = 1; i <= lattice.eos_pos; i++) {
-        var nodes = lattice.nodes_end_at[i];
-        if (nodes == null) {
-            continue;
+  forward(lattice) {
+    // TODO convert lattice to an enumable object
+    // TODO use forEach
+    for (let i = 1; i <= lattice.eos_pos; i += 1) {
+      const nodes = lattice.nodes_end_at[i];
+      if (nodes == null) {
+        continue;
+      }
+      for (let j = 0; j < nodes.length; j += 1) {
+        const node = nodes[j];
+        let cost = Number.MAX_VALUE;
+        let shortest_prev_node;
+
+        const prev_nodes = lattice.nodes_end_at[node.start_pos - 1];
+        if (prev_nodes == null) {
+          // TODO process unknown words (repair word lattice)
+          continue;
         }
-        for (j = 0; j < nodes.length; j++) {
-            var node = nodes[j];
-            var cost = Number.MAX_VALUE;
-            var shortest_prev_node;
+        for (let k = 0; k < prev_nodes.length; k += 1) {
+          const prev_node = prev_nodes[k];
 
-            var prev_nodes = lattice.nodes_end_at[node.start_pos - 1];
-            if (prev_nodes == null) {
-                // TODO process unknown words (repair word lattice)
-                continue;
-            }
-            for (k = 0; k < prev_nodes.length; k++) {
-                var prev_node = prev_nodes[k];
+          let edge_cost;
+          if (node.left_id == null || prev_node.right_id == null) {
+            // TODO assert
+            console.log('Left or right is null');
+            edge_cost = 0;
+          } else {
+            edge_cost = this.connection_costs.get(prev_node.right_id, node.left_id);
+          }
 
-                var edge_cost;
-                if (node.left_id == null || prev_node.right_id == null) {
-                    // TODO assert
-                    console.log("Left or right is null");
-                    edge_cost = 0;
-                } else {
-                    edge_cost = this.connection_costs.get(prev_node.right_id, node.left_id);
-                }
-
-                var _cost = prev_node.shortest_cost + edge_cost + node.cost;
-                if (_cost < cost) {
-                    shortest_prev_node = prev_node;
-                    cost = _cost;
-                }
-            }
-
-            node.prev = shortest_prev_node;
-            node.shortest_cost = cost;
+          const _cost = prev_node.shortest_cost + edge_cost + node.cost;
+          if (_cost < cost) {
+            shortest_prev_node = prev_node;
+            cost = _cost;
+          }
         }
+
+        node.prev = shortest_prev_node;
+        node.shortest_cost = cost;
+      }
     }
     return lattice;
-};
+  }
 
-ViterbiSearcher.prototype.backward = function (lattice) {
-    var shortest_path = [];
-    var eos = lattice.nodes_end_at[lattice.nodes_end_at.length - 1][0];
+  // eslint-disable-next-line class-methods-use-this
+  backward(lattice) {
+    const shortest_path = [];
+    const eos = lattice.nodes_end_at[lattice.nodes_end_at.length - 1][0];
 
-    var node_back = eos.prev;
+    let node_back = eos.prev;
     if (node_back == null) {
-        return [];
+      return [];
     }
-    while (node_back.type !== "BOS") {
-        shortest_path.push(node_back);
-        if (node_back.prev == null) {
-            // TODO Failed to back. Process unknown words?
-            return [];
-        }
-        node_back = node_back.prev;
+    while (node_back.type !== 'BOS') {
+      shortest_path.push(node_back);
+      if (node_back.prev == null) {
+        // TODO Failed to back. Process unknown words?
+        return [];
+      }
+      node_back = node_back.prev;
     }
 
     return shortest_path.reverse();
-};
+  }
+}
+
 
 module.exports = ViterbiSearcher;
 
