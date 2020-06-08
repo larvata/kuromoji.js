@@ -15,14 +15,13 @@
  * limitations under the License.
  */
 
-"use strict";
+const kuromoji = require('../src/kuromoji');
 
-var kuromoji = require("../src/kuromoji");
-var DIC_DIR = "dict/";
+const DIC_DIR = 'dict/';
 
 // Load dictionaries from file, and prepare tokenizer
-kuromoji.builder({ dicPath: DIC_DIR }).build(function (error, tokenizer) {
-    var path = tokenizer.tokenize("すもももももももものうち");
-    console.log(path);
-    module.exports = tokenizer;
+kuromoji.builder({ dicPath: DIC_DIR }).build((error, tokenizer) => {
+  const path = tokenizer.tokenize('すもももももももものうち');
+  console.log(path);
+  module.exports = tokenizer;
 });
