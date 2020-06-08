@@ -54,7 +54,7 @@ class TokenInfoDictionary {
       const feature = entry.slice(4).join(',');
 
       // Assertion
-      if (!Number.isFinite(left_id) || !Number.isFinite(right_id) || !Number.isFinite(word_cost)) {
+      if (!Number.isFinite(+left_id) || !Number.isFinite(+right_id) || !Number.isFinite(+word_cost)) {
         console.log(entry);
       }
 

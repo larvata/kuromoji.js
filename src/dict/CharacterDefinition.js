@@ -190,7 +190,7 @@ class CharacterDefinition {
 
   static parseCategoryMapping(parsed_category_mapping) {
     // TODO the parsed_category_mapping is hex cannot parse int as dec
-    const start = parseInt(parsed_category_mapping[1]);
+    const start = parseInt(parsed_category_mapping[1], 16);
     const default_category = parsed_category_mapping[2];
     const compatible_category = (parsed_category_mapping.length > 3)
       ? parsed_category_mapping.slice(3)
@@ -207,8 +207,8 @@ class CharacterDefinition {
 
   static parseRangeCategoryMapping(parsed_category_mapping) {
     // TODO the parsed_category_mapping is hex cannot parse int as dec
-    const start = parseInt(parsed_category_mapping[1]);
-    const end = parseInt(parsed_category_mapping[2]);
+    const start = parseInt(parsed_category_mapping[1], 16);
+    const end = parseInt(parsed_category_mapping[2], 16);
     const default_category = parsed_category_mapping[3];
     const compatible_category = (parsed_category_mapping.length > 4)
       ? parsed_category_mapping.slice(4)
