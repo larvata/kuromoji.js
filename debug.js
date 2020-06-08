@@ -11,8 +11,8 @@ const DIC_DIR = './test/resource/minimum-dic/';
 // console.log(result);
 
 
-// kuromoji.builder({ dicPath: DIC_DIR }).build((error, tokenizer) => {
-//   const result = tokenizer.tokenize('すもももももももものうち');
+// kuromoji.builder({ dicPath: DIC_DIR }).build((_tokenizer) => {
+//   const result = _tokenizer.tokenize('すもももももももものうち');
 //   console.log(result);
 // });
 

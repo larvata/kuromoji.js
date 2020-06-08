@@ -24,24 +24,18 @@ class NodeDictionaryLoader extends DictionaryLoader {
   /**
    * Utility function
    * @param {string} file Dictionary file path
-   * @param {NodeDictionaryLoader~onLoad} callback Callback function
    */
   // eslint-disable-next-line class-methods-use-this
-  loadArrayBuffer(file, callback) {
-    // TODO investigate can this module rewroten in plain function
-    fs.readFile(file, (err, buffer) => {
-      if (err) {
-        return callback(err);
-      }
-      return callback(null, buffer.buffer);
+  loadArrayBuffer(file) {
+    return new Promise((resolve, reject) => {
+      fs.readFile(file, (err, buffer) => {
+        if (err) {
+          return reject(err);
+        }
+        return resolve(buffer.buffer);
+      });
     });
   }
-
-  /**
-   * @callback NodeDictionaryLoader~onLoad
-   * @param {Object} err Error object
-   * @param {Uint8Array} buffer Loaded buffer
-   */
 }
 
 

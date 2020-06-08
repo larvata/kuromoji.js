@@ -10,7 +10,6 @@
     "url": "https://github.com/takuyaa/kuromoji.js/issues"
   },
   "dependencies": {
-    "async": "^2.0.1",
     "doublearray": "0.0.2",
     "express": "^4.17.1"
   },

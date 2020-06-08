@@ -28,7 +28,7 @@ describe("DictionaryLoader", function () {
         this.timeout(5 * 60 * 1000); // 5 min
 
         var loader = new DictionaryLoader(DIC_DIR);
-        loader.load(function (err, dic) {
+        loader.load().then((dic) => {
             dictionaries = dic;
             done();
         });
@@ -51,19 +51,23 @@ describe("DictionaryLoader", function () {
 describe("DictionaryLoader about loading", function () {
     it("could load directory path without suffix /", function (done) {
         this.timeout(5 * 60 * 1000); // 5 min
-        
+
         var loader = new DictionaryLoader("dict"); // not have suffix /
-        loader.load(function (err, dic) {
-            expect(err).to.be.null;
+        loader.load().then((dic) => {
             expect(dic).to.not.be.undefined;
+            done();
+        }).catch((err) => {
+            expect(err).to.be.null;
             done();
         });
     });
     it("couldn't load dictionary, then call with error", function (done) {
         var loader = new DictionaryLoader("non-exist/dictionaries");
-        loader.load(function (err, dic) {
+        loader.load().then((dic) => {
+            // nop
+        }).catch((err) => {
             expect(err).to.be.an.instanceof(Error);
             done();
-        });
+        })
     });
 });

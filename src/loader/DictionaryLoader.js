@@ -17,8 +17,8 @@
 
 
 const path = require('path');
-const async = require('async');
 const DynamicDictionaries = require('../dict/DynamicDictionaries');
+
 
 // TODO this class should be used as a base class
 // TODO rename to DictionaryLoaderBase
@@ -34,102 +34,74 @@ class DictionaryLoader {
     this.dic_path = dic_path;
   }
 
-  /**
-   * Load dictionary files
-   * @param {DictionaryLoader~onLoad} load_callback Callback function called after loaded
-   */
-  load(load_callback) {
-    const { dic, dic_path, loadArrayBuffer } = this;
+  loadFiles(files) {
+    const { dic_path } = this;
 
-    async.parallel([
-      // Trie
-      (callback) => {
-        async.map(['base.dat', 'check.dat'], (filename, _callback) => {
-          loadArrayBuffer(path.join(dic_path, filename), (err, buffer) => {
-            if (err) {
-              return _callback(err);
-            }
-            _callback(null, buffer);
-          });
-        }, (err, buffers) => {
-          if (err) {
-            return callback(err);
-          }
-          const base_buffer = new Int32Array(buffers[0]);
-          const check_buffer = new Int32Array(buffers[1]);
+    return Promise.all(files.map((file) => {
+      const url = path.join(dic_path, file);
+      return this.loadArrayBuffer(url);
+    }));
+  }
 
-          dic.loadTrie(base_buffer, check_buffer);
-          return callback(null);
-        });
-      },
-      // Token info dictionaries
-      (callback) => {
-        async.map(['tid.dat', 'tid_pos.dat', 'tid_map.dat'], (filename, _callback) => {
-          loadArrayBuffer(path.join(dic_path, filename), (err, buffer) => {
-            if (err) {
-              return _callback(err);
-            }
-            _callback(null, buffer);
-          });
-        }, (err, buffers) => {
-          if (err) {
-            return callback(err);
-          }
-          const token_info_buffer = new Uint8Array(buffers[0]);
-          const pos_buffer = new Uint8Array(buffers[1]);
-          const target_map_buffer = new Uint8Array(buffers[2]);
+  loadTrie() {
+    const files = ['base.dat', 'check.dat'];
 
-          dic.loadTokenInfoDictionaries(token_info_buffer, pos_buffer, target_map_buffer);
-          return callback(null);
-        });
-      },
-      // Connection cost matrix
-      (callback) => {
-        loadArrayBuffer(path.join(dic_path, 'cc.dat'), (err, buffer) => {
-          if (err) {
-            return callback(err);
-          }
-          const cc_buffer = new Int16Array(buffer);
-          dic.loadConnectionCosts(cc_buffer);
-          return callback(null);
-        });
-      },
-      // Unknown dictionaries
-      (callback) => {
-        async.map(['unk.dat', 'unk_pos.dat', 'unk_map.dat', 'unk_char.dat', 'unk_compat.dat', 'unk_invoke.dat'], (filename, _callback) => {
-          loadArrayBuffer(path.join(dic_path, filename), (err, buffer) => {
-            if (err) {
-              return _callback(err);
-            }
-            return _callback(null, buffer);
-          });
-        }, (err, buffers) => {
-          if (err) {
-            return callback(err);
-          }
-          const unk_buffer = new Uint8Array(buffers[0]);
-          const unk_pos_buffer = new Uint8Array(buffers[1]);
-          const unk_map_buffer = new Uint8Array(buffers[2]);
-          const cat_map_buffer = new Uint8Array(buffers[3]);
-          const compat_cat_map_buffer = new Uint32Array(buffers[4]);
-          const invoke_def_buffer = new Uint8Array(buffers[5]);
+    return this.loadFiles(files).then(([base, check]) => {
+      const base_buffer = new Int32Array(base);
+      const check_buffer = new Int32Array(check);
 
-          dic.loadUnknownDictionaries(unk_buffer, unk_pos_buffer, unk_map_buffer, cat_map_buffer, compat_cat_map_buffer, invoke_def_buffer);
-          // dic.loadUnknownDictionaries(char_buffer, unk_buffer);
-          return callback(null);
-        });
-      },
-    ], (err) => {
-      load_callback(err, dic);
+      this.dic.loadTrie(base_buffer, check_buffer);
+    });
+  }
+
+  loadToken() {
+    const files = ['tid.dat', 'tid_pos.dat', 'tid_map.dat'];
+
+    return this.loadFiles(files).then(([token_info, pos, target_map]) => {
+      const token_info_buffer = new Uint8Array(token_info);
+      const pos_buffer = new Uint8Array(pos);
+      const target_map_buffer = new Uint8Array(target_map);
+
+      this.dic.loadTokenInfoDictionaries(token_info_buffer, pos_buffer, target_map_buffer);
+    });
+  }
+
+  loadCostMatrix() {
+    const files = ['cc.dat'];
+
+    return this.loadFiles(files).then(([cc]) => {
+      const cc_buffer = new Int16Array(cc);
+
+      this.dic.loadConnectionCosts(cc_buffer);
+    });
+  }
+
+  loadUnknownDictionaries() {
+    const files = ['unk.dat', 'unk_pos.dat', 'unk_map.dat', 'unk_char.dat', 'unk_compat.dat', 'unk_invoke.dat'];
+
+    return this.loadFiles(files).then(([unk, unk_pos, unk_map, unk_char, unk_compat, unk_invoke]) => {
+      const unk_buffer = new Uint8Array(unk);
+      const unk_pos_buffer = new Uint8Array(unk_pos);
+      const unk_map_buffer = new Uint8Array(unk_map);
+      const unk_char_buffer = new Uint8Array(unk_char);
+      const unk_compat_buffer = new Uint8Array(unk_compat);
+      const unk_invoke_buffer = new Uint8Array(unk_invoke);
+
+      this.dic.loadUnknownDictionaries(unk_buffer, unk_pos_buffer, unk_map_buffer, unk_char_buffer, unk_compat_buffer, unk_invoke_buffer);
     });
   }
 
   /**
-   * Callback
-   * @callback DictionaryLoader~onLoad
-   * @param {Object} err Error object
-   * @param {DynamicDictionaries} dic Loaded dictionary
+   * Load dictionary files
    */
+  load() {
+    return Promise.all([
+      this.loadTrie(),
+      this.loadToken(),
+      this.loadCostMatrix(),
+      this.loadUnknownDictionaries(),
+    ]).then(() => this.dic);
+  }
 }
 
 

@@ -33,21 +33,11 @@ class TokenizerBuilder {
 
   /**
    * Build Tokenizer instance by asynchronous manner
-   * @param {TokenizerBuilder~onLoad} callback Callback function
    */
-  build(callback) {
+  build() {
     const loader = new DictionaryLoader(this.dic_path);
-    loader.load((err, dic) => {
-      callback(err, new Tokenizer(dic));
-    });
+    return loader.load().then((dic) => new Tokenizer(dic));
   }
-
-  /**
-   * Callback used by build
-   * @callback TokenizerBuilder~onLoad
-   * @param {Object} err Error object
-   * @param {Tokenizer} tokenizer Prepared Tokenizer
-   */
 }
 
 module.exports = TokenizerBuilder;
