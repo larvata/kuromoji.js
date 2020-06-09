@@ -20,10 +20,7 @@ const path = require('path');
 const DynamicDictionaries = require('../dict/DynamicDictionaries');
 
 
-// TODO this class should be used as a base class
-// TODO rename to DictionaryLoaderBase
-// TODO replace async with es6 Promise
-class DictionaryLoader {
+class DictionaryLoaderBase {
   /**
    * DictionaryLoader base constructor
    * @param {string} dic_path Dictionary path
@@ -105,4 +102,4 @@ class DictionaryLoader {
 }
 
 
-module.exports = DictionaryLoader;
+module.exports = DictionaryLoaderBase;

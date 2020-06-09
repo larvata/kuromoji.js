@@ -15,10 +15,10 @@
  * limitations under the License.
  */
 
-const DictionaryLoader = require('./DictionaryLoader');
+const DictionaryLoaderBase = require('./DictionaryLoaderBase');
 
 
-class BrowserDictionaryLoader extends DictionaryLoader {
+class BrowserDictionaryLoader extends DictionaryLoaderBase {
   /**
    * Utility function to load gzipped dictionary
    * @param {string} url Dictionary URL

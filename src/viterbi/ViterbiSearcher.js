@@ -36,8 +36,6 @@ class ViterbiSearcher {
   }
 
   forward(lattice) {
-    // TODO convert lattice to an enumable object
-    // TODO use forEach
     for (let i = 1; i <= lattice.eos_pos; i += 1) {
       const nodes = lattice.nodes_end_at[i];
       if (nodes == null) {

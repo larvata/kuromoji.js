@@ -20,7 +20,6 @@
  * Mappings between IPADIC dictionary features and tokenized results
  * @constructor
  */
-// TODO use as plain module rather than class
 class IpadicFormatter {
   // eslint-disable-next-line class-methods-use-this
   formatEntry(word_id, position, type, features) {

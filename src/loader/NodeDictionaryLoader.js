@@ -17,10 +17,10 @@
 
 
 const fs = require('fs');
-const DictionaryLoader = require('./DictionaryLoader');
+const DictionaryLoaderBase = require('./DictionaryLoaderBase');
 
 
-class NodeDictionaryLoader extends DictionaryLoader {
+class NodeDictionaryLoader extends DictionaryLoaderBase {
   /**
    * Utility function
    * @param {string} file Dictionary file path
