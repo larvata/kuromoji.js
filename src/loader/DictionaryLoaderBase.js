@@ -26,9 +26,13 @@ class DictionaryLoaderBase {
    * @param {string} dic_path Dictionary path
    * @constructor
    */
-  constructor(dic_path) {
+  constructor(dic_path = '') {
     this.dic = new DynamicDictionaries();
     this.dic_path = dic_path;
+    if (!this.dic_path.endsWith('/')) {
+      // suffix "/" is require for url.resolve()
+      this.dic_path += '/';
+    }
   }
 
   loadFiles(files) {

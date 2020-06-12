@@ -17,7 +17,7 @@
 
 const kuromoji = require('../src/kuromoji');
 
-const DIC_DIR = 'dict/';
+const DIC_DIR = 'dict';
 
 // Load dictionaries from file, and prepare tokenizer
 kuromoji.builder({ dicPath: DIC_DIR }).build().then((tokenizer) => {
