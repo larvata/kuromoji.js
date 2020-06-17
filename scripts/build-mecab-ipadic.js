@@ -8,23 +8,75 @@ if (!fs.existsSync(MECAB_IPADIC_DIRECTORY)) {
   fs.mkdirSync(MECAB_IPADIC_DIRECTORY);
 }
 
-// To node.js Buffer
+// Convert Int32Array to Buffer
 function toBuffer(typed) {
-  const ab = typed.buffer;
-  const buffer = Buffer.alloc(ab.byteLength);
-  const view = new Uint8Array(ab);
-  for (let i = 0; i < buffer.length; i += 1) {
-    buffer[i] = view[i];
-  }
-  return buffer;
+  return Buffer.from(typed.buffer);
 }
 
 const ipaDic = new IPADIC();
 const builder = kuromoji.dictionaryBuilder();
 
+
+// const posTypesMap = {
+//   lastIndex: -1,
+// };
+const maskUslessFeatures = (line) => {
+  return line;
+
+  // clear the usless features, it can reduce about 20% of the dict files
+  const parts = line.split(',');
+
+  // const pos = parts[4];
+  // let posIndex = posTypesMap[pos];
+  // if (posIndex === undefined) {
+  //   posTypesMap.lastIndex += 1;
+  //   posTypesMap[pos] = posTypesMap.lastIndex;
+  //   posIndex = posTypesMap.lastIndex;
+  // }
+
+  // parts[0] = ''; // surface_form
+  // parts[1] = ''; // left
+  // parts[2] = ''; // right
+  // parts[3] = ''; // cost
+  // parts[4] = posIndex.toString(); // pos
+  parts[5] = ''; // pos_detail_1
+  parts[6] = ''; // pos_detail_2
+  parts[7] = ''; // pos_detail_3
+  parts[8] = ''; // conjugated_type
+  parts[9] = ''; // conjugated_form
+  parts[10] = ''; // basic_form
+  // parts[11] = ''; // reading
+  parts[12] = ''; // pronunciation
+
+  return parts.join(',');
+};
+
+const addCustomTokenInfo = () => {
+  const custom = [
+    '令和,1288,1288,8142,名詞,固有名詞,一般,*,*,*,令和,レイワ,レイワ',
+    '林愛夏,1289,1289,7251,名詞,固有名詞,人名,一般,*,*,林愛夏,ハヤシマナツ,ハヤシマナツ',
+    '大矢梨華子,1289,1289,6278,名詞,固有名詞,人名,一般,*,*,大矢梨華子,オオヤリカコ,オーヤリカコ',
+    '傳谷英里香,1289,1289,6278,名詞,固有名詞,人名,一般,*,*,傳谷英里香,デンヤエリカ,デンヤエリカ',
+    '高見奈央,1289,1289,4504,名詞,固有名詞,人名,一般,*,*,高見奈央,タカミナオ,タカミナオ',
+    '渡邊璃生,1289,1289,6024,名詞,固有名詞,人名,一般,*,*,渡邊璃生,ワタナベリオ,ワタナベリオ',
+    '西井万理那,1289,1289,6278,名詞,固有名詞,人名,一般,*,*,西井万理那,ニシイマリナ,ニシーマリナ',
+    '東理紗,1289,1289,7251,名詞,固有名詞,人名,一般,*,*,東理紗,アズマリサ,アズマリサ',
+    '廣川奈々聖,1289,1289,6278,名詞,固有名詞,人名,一般,*,*,廣川奈々聖,ヒロカワナナセ,ヒロカワナナセ',
+    '松田美里,1289,1289,2974,名詞,固有名詞,人名,一般,*,*,松田美里,マツダミリ,マツダミリ',
+    '三品瑠香,1289,1289,3921,名詞,固有名詞,人名,一般,*,*,三品瑠香,ミシナルカ,ミシナルカ',
+    '小玉梨々華,1289,1289,6278,名詞,固有名詞,人名,一般,*,*,小玉梨々華,コダマリリカ,コダマリリカ',
+    '坂元葉月,1289,1289,4776,名詞,固有名詞,人名,一般,*,*,坂元葉月,サカモトハヅキ,サカモトハズキ',
+  ];
+
+  custom.forEach((line) => {
+    builder.addTokenInfoDictionary(maskUslessFeatures(line));
+  });
+};
+
+
 // Build token info dictionary
 const tokenInfoPromise = ipaDic.readTokenInfo((line) => {
-  builder.addTokenInfoDictionary(line);
+  builder.addTokenInfoDictionary(maskUslessFeatures(line));
 }).then(() => {
   console.log('Finishied to read token info dics');
 });
@@ -57,6 +109,7 @@ Promise.all([
   unkDefPromise,
   charDefPromise,
 ]).then(() => {
+  addCustomTokenInfo();
   console.log('Finishied to read all seed dictionary files');
   console.log('Building binary dictionary ...');
   return builder.build();

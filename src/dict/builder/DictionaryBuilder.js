@@ -146,14 +146,12 @@ class DictionaryBuilder {
    * @returns {DoubleArray} Double-Array trie
    */
   buildDoubleArray() {
-    let trie_id = 0;
-    const words = this.tid_entries.map((entry) => {
-      const surface_form = entry[0];
-      // TODO replace trie_id by using map index
+    const words = this.tid_entries.map((entry, idx) => {
+      const [surface_form] = entry;
       // eslint-disable-next-line no-return-assign
       return {
         k: surface_form,
-        v: (trie_id += 1),
+        v: idx,
       };
     });
 
