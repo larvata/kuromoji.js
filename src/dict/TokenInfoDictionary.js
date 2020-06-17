@@ -37,11 +37,9 @@ class TokenInfoDictionary {
     // using as hashmap, string -> string (word_id -> surface_form) to build dictionary
     const dictionary_entries = {};
 
-    for (let i = 0; i < entries.length; i += 1) {
-      const entry = entries[i];
-
+    entries.forEach((entry) => {
       if (entry.length < 4) {
-        continue;
+        return;
       }
 
       const [
@@ -60,7 +58,7 @@ class TokenInfoDictionary {
 
       const token_info_id = this.put(left_id, right_id, word_cost, surface_form, feature);
       dictionary_entries[token_info_id] = surface_form;
-    }
+    });
 
     // Remove last unused area
     this.dictionary.shrink();
@@ -73,6 +71,10 @@ class TokenInfoDictionary {
     const token_info_id = this.dictionary.position;
     const pos_id = this.pos_buffer.position;
 
+    // TODO here might be a bug:
+    // left_id, right_id, word_cost are integer numbers
+    // but putShort() treats them as HEX
+    // in additional, the lower/upper extracting is also wrong
     this.dictionary.putShort(left_id);
     this.dictionary.putShort(right_id);
     this.dictionary.putShort(word_cost);

@@ -44,14 +44,13 @@ class ViterbiBuilder {
     for (let pos = 0; pos < sentence.length; pos += 1) {
       const tail = sentence.slice(pos);
       const vocabulary = this.trie.commonPrefixSearch(tail);
-      for (let n = 0; n < vocabulary.length; n += 1) {
-        // Words in dictionary do not have surrogate pair (only UCS2 set)
-        const trie_id = vocabulary[n].v;
-        const key = vocabulary[n].k;
+
+      vocabulary.forEach((v) => {
+        const { v: trie_id, k: key } = v;
 
         const token_info_ids = this.token_info_dictionary.target_map[trie_id];
-        for (let i = 0; i < token_info_ids.length; i += 1) {
-          const token_info_id = parseInt(token_info_ids[i], 10);
+        token_info_ids.forEach((t) => {
+          const token_info_id = parseInt(t, 10);
 
           const left_id = this.token_info_dictionary.dictionary.getShort(token_info_id);
           const right_id = this.token_info_dictionary.dictionary.getShort(token_info_id + 2);
@@ -59,8 +58,8 @@ class ViterbiBuilder {
 
           // node_name, cost, start_index, length, type, left_id, right_id, surface_form
           lattice.append(new ViterbiNode(token_info_id, word_cost, pos + 1, key.length, 'KNOWN', left_id, right_id, key));
-        }
-      }
+        });
+      });
 
       // Unknown word processing
       const surrogate_aware_tail = new SurrogateAwareString(tail);

@@ -1,5 +1,6 @@
 const path = require('path');
 
+// this config will build kuromoji.js for browser
 module.exports = {
   entry: './src/kuromoji.js',
   output: {
@@ -7,6 +8,11 @@ module.exports = {
     filename: 'kuromoji.js',
     library: 'kuromoji',
     libraryTarget: 'window',
+  },
+  resolve: {
+    alias: {
+      './loader/NodeDictionaryLoader': './loader/BrowserDictionaryLoader',
+    },
   },
   mode: 'production',
 };

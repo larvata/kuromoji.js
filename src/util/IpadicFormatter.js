@@ -53,7 +53,7 @@ class IpadicFormatter {
 
     token.surface_form = surface_form;
 
-    [,
+    [, // skip the surface_form for the first item
       token.pos,
       token.pos_detail_1,
       token.pos_detail_2,
