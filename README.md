@@ -1,4 +1,4 @@
-kuromoji.js
+# kuromoji.js
 ===========
 
 A fork of [takuyaa/kuromoji.js](https://github.com/takuyaa/kuromoji.js)
@@ -10,8 +10,7 @@ This is a pure JavaScript porting of [Kuromoji](https://www.atilika.com/ja/kurom
 ```
 
 
-# Updates to original package
----------
+## Updates to original package
 
 - rewrited with es6, promise
 
@@ -20,8 +19,7 @@ This is a pure JavaScript porting of [Kuromoji](https://www.atilika.com/ja/kurom
 - supports loading dicts from url
 
 
-# Usage
----------
+## Usage
 
 Build dictionary data from IPADIC:
 ```
@@ -34,8 +32,7 @@ npm run build
 ```
 
 
-# Directory
----------
+## Directory
 
 Directory tree is as follows:
 
@@ -48,8 +45,7 @@ Directory tree is as follows:
     test/         -- Unit test
 
 
-# Usage
----------
+## Usage
 
 You can tokenize sentences with only 5 lines of code.
 If you need working examples, you can see the files under the demo or example directory.
@@ -87,8 +83,7 @@ In your JavaScript:
     });
 
 
-# API
----------
+## API
 
 The function tokenize() returns an JSON array like this:
 
