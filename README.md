@@ -1,13 +1,9 @@
 # kuromoji.js
-===========
 
-A fork of [takuyaa/kuromoji.js](https://github.com/takuyaa/kuromoji.js)
-
-Original Descriptions:
-```
 JavaScript implementation of Japanese morphological analyzer.
 This is a pure JavaScript porting of [Kuromoji](https://www.atilika.com/ja/kuromoji/).
-```
+
+This is the fork of [takuyaa/kuromoji.js](https://github.com/takuyaa/kuromoji.js)
 
 
 ## Updates to original package
