@@ -9,7 +9,7 @@
   "dependencies": {
     "doublearray": "0.0.2",
     "express": "^4.17.1",
-    "mecab-ipadic-seed": "github:larvata/mecab-ipadic-seed#develop"
+    "mecab-ipadic-seed": "github:larvata/mecab-ipadic-seed#v0.0.10"
   },
   "devDependencies": {
     "chai": "^4.2.0",

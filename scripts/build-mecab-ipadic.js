@@ -1,25 +1,26 @@
 const fs = require('fs');
+const path = require('path');
 const IPADIC = require('mecab-ipadic-seed');
 const kuromoji = require('../src/kuromoji.js');
 
-const MECAB_IPADIC_DIRECTORY = 'dict';
+const MECAB_IPADIC_DIRECTORY = '.cache/ipadic';
+const DICT_OUTPUT_DIRECTORY = 'dict';
 
-if (!fs.existsSync(MECAB_IPADIC_DIRECTORY)) {
-  fs.mkdirSync(MECAB_IPADIC_DIRECTORY);
+function createDirectorySync(dpath) {
+  if (!fs.existsSync(dpath)) {
+    fs.mkdirSync(dpath, { recursive: true });
+  }
 }
+
+createDirectorySync(MECAB_IPADIC_DIRECTORY);
+createDirectorySync(DICT_OUTPUT_DIRECTORY);
 
 // Convert Int32Array to Buffer
 function toBuffer(typed) {
   return Buffer.from(typed.buffer);
 }
 
-const ipaDic = new IPADIC();
-const builder = kuromoji.dictionaryBuilder();
-
-
-// const posTypesMap = {
-//   lastIndex: -1,
-// };
+// remove usless entity feature to reduce the size of the dictionary
 const maskUslessFeatures = (line) => {
   return line;
 
@@ -51,7 +52,8 @@ const maskUslessFeatures = (line) => {
   return parts.join(',');
 };
 
-const addCustomTokenInfo = () => {
+
+const addCustomTokenInfo = (builder) => {
   const custom = [
     '令和,1288,1288,8142,名詞,固有名詞,一般,*,*,*,令和,レイワ,レイワ',
     '林愛夏,1289,1289,7251,名詞,固有名詞,人名,一般,*,*,林愛夏,ハヤシマナツ,ハヤシマナツ',
@@ -74,46 +76,59 @@ const addCustomTokenInfo = () => {
 };
 
 
-// Build token info dictionary
-const tokenInfoPromise = ipaDic.readTokenInfo((line) => {
-  builder.addTokenInfoDictionary(maskUslessFeatures(line));
-}).then(() => {
-  console.log('Finishied to read token info dics');
-});
+(async () => {
+  // download and patch the dictionaries
+  await IPADIC.prepareDictionaries({
+    neologd: false,
+    dictPath: MECAB_IPADIC_DIRECTORY,
+  });
 
-// Build connection costs matrix
-const matrixDefPromise = ipaDic.readMatrixDef((line) => {
-  builder.putCostMatrixLine(line);
-}).then(() => {
-  console.log('Finishied to read matrix.def');
-});
 
-// Build unknown dictionary
-const unkDefPromise = ipaDic.readUnkDef((line) => {
-  builder.putUnkDefLine(line);
-}).then(() => {
-  console.log('Finishied to read unk.def');
-});
+  const ipaDic = new IPADIC(MECAB_IPADIC_DIRECTORY);
+  const builder = kuromoji.dictionaryBuilder();
 
-// Build character definition dictionary
-const charDefPromise = ipaDic.readCharDef((line) => {
-  builder.putCharDefLine(line);
-}).then(() => {
-  console.log('Finishied to read char.def');
-});
+  // Build token info dictionary
+  const tokenInfoPromise = ipaDic.readTokenInfo((line) => {
+    builder.addTokenInfoDictionary(maskUslessFeatures(line));
+  }).then(() => {
+    console.log('Finishied to read token info dics');
+  });
 
-// Build kuromoji.js binary dictionary
-Promise.all([
-  tokenInfoPromise,
-  matrixDefPromise,
-  unkDefPromise,
-  charDefPromise,
-]).then(() => {
-  addCustomTokenInfo();
+  // Build connection costs matrix
+  const matrixDefPromise = ipaDic.readMatrixDef((line) => {
+    builder.putCostMatrixLine(line);
+  }).then(() => {
+    console.log('Finishied to read matrix.def');
+  });
+
+  // Build unknown dictionary
+  const unkDefPromise = ipaDic.readUnkDef((line) => {
+    builder.putUnkDefLine(line);
+  }).then(() => {
+    console.log('Finishied to read unk.def');
+  });
+
+  // Build character definition dictionary
+  const charDefPromise = ipaDic.readCharDef((line) => {
+    builder.putCharDefLine(line);
+  }).then(() => {
+    console.log('Finishied to read char.def');
+  });
+
+  await Promise.all([
+    tokenInfoPromise,
+    matrixDefPromise,
+    unkDefPromise,
+    charDefPromise,
+  ]);
+
+  addCustomTokenInfo(builder);
+
+  console.log('');
   console.log('Finishied to read all seed dictionary files');
   console.log('Building binary dictionary ...');
-  return builder.build();
-}).then((dic) => {
+
+  const dic = await builder.build();
   const base_buffer = toBuffer(dic.trie.bc.getBaseBuffer());
   const check_buffer = toBuffer(dic.trie.bc.getCheckBuffer());
   const token_info_buffer = toBuffer(dic.token_info_dictionary.dictionary.buffer);
@@ -127,18 +142,18 @@ Promise.all([
   const char_compat_map_buffer = toBuffer(dic.unknown_dictionary.character_definition.compatible_category_map);
   const invoke_definition_map_buffer = toBuffer(dic.unknown_dictionary.character_definition.invoke_definition_map.toBuffer());
 
-  fs.writeFileSync('dict/base.dat', base_buffer);
-  fs.writeFileSync('dict/check.dat', check_buffer);
-  fs.writeFileSync('dict/tid.dat', token_info_buffer);
-  fs.writeFileSync('dict/tid_pos.dat', tid_pos_buffer);
-  fs.writeFileSync('dict/tid_map.dat', tid_map_buffer);
-  fs.writeFileSync('dict/cc.dat', connection_costs_buffer);
-  fs.writeFileSync('dict/unk.dat', unk_buffer);
-  fs.writeFileSync('dict/unk_pos.dat', unk_pos_buffer);
-  fs.writeFileSync('dict/unk_map.dat', unk_map_buffer);
-  fs.writeFileSync('dict/unk_char.dat', char_map_buffer);
-  fs.writeFileSync('dict/unk_compat.dat', char_compat_map_buffer);
-  fs.writeFileSync('dict/unk_invoke.dat', invoke_definition_map_buffer);
-}).then(() => {
+  fs.writeFileSync(path.join(DICT_OUTPUT_DIRECTORY, 'base.dat'), base_buffer);
+  fs.writeFileSync(path.join(DICT_OUTPUT_DIRECTORY, 'check.dat'), check_buffer);
+  fs.writeFileSync(path.join(DICT_OUTPUT_DIRECTORY, 'tid.dat'), token_info_buffer);
+  fs.writeFileSync(path.join(DICT_OUTPUT_DIRECTORY, 'tid_pos.dat'), tid_pos_buffer);
+  fs.writeFileSync(path.join(DICT_OUTPUT_DIRECTORY, 'tid_map.dat'), tid_map_buffer);
+  fs.writeFileSync(path.join(DICT_OUTPUT_DIRECTORY, 'cc.dat'), connection_costs_buffer);
+  fs.writeFileSync(path.join(DICT_OUTPUT_DIRECTORY, 'unk.dat'), unk_buffer);
+  fs.writeFileSync(path.join(DICT_OUTPUT_DIRECTORY, 'unk_pos.dat'), unk_pos_buffer);
+  fs.writeFileSync(path.join(DICT_OUTPUT_DIRECTORY, 'unk_map.dat'), unk_map_buffer);
+  fs.writeFileSync(path.join(DICT_OUTPUT_DIRECTORY, 'unk_char.dat'), char_map_buffer);
+  fs.writeFileSync(path.join(DICT_OUTPUT_DIRECTORY, 'unk_compat.dat'), char_compat_map_buffer);
+  fs.writeFileSync(path.join(DICT_OUTPUT_DIRECTORY, 'unk_invoke.dat'), invoke_definition_map_buffer);
+
   console.log('Dict built from mecab-ipadic-seed done.');
-});
+})();
