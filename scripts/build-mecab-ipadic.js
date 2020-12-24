@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const IPADIC = require('mecab-ipadic-seed');
-const kuromoji = require('../src/kuromoji.js');
+const { DictionaryBuilder } = require('../src/kuromoji.js');
 
 const MECAB_IPADIC_DIRECTORY = '.cache/ipadic';
 const DICT_OUTPUT_DIRECTORY = 'dict';
@@ -54,20 +54,9 @@ const maskUslessFeatures = (line) => {
 
 
 const addCustomTokenInfo = (builder) => {
+  // example
   const custom = [
-    '令和,1288,1288,8142,名詞,固有名詞,一般,*,*,*,令和,レイワ,レイワ',
-    '林愛夏,1289,1289,7251,名詞,固有名詞,人名,一般,*,*,林愛夏,ハヤシマナツ,ハヤシマナツ',
-    '大矢梨華子,1289,1289,6278,名詞,固有名詞,人名,一般,*,*,大矢梨華子,オオヤリカコ,オーヤリカコ',
-    '傳谷英里香,1289,1289,6278,名詞,固有名詞,人名,一般,*,*,傳谷英里香,デンヤエリカ,デンヤエリカ',
-    '高見奈央,1289,1289,4504,名詞,固有名詞,人名,一般,*,*,高見奈央,タカミナオ,タカミナオ',
-    '渡邊璃生,1289,1289,6024,名詞,固有名詞,人名,一般,*,*,渡邊璃生,ワタナベリオ,ワタナベリオ',
     '西井万理那,1289,1289,6278,名詞,固有名詞,人名,一般,*,*,西井万理那,ニシイマリナ,ニシーマリナ',
-    '東理紗,1289,1289,7251,名詞,固有名詞,人名,一般,*,*,東理紗,アズマリサ,アズマリサ',
-    '廣川奈々聖,1289,1289,6278,名詞,固有名詞,人名,一般,*,*,廣川奈々聖,ヒロカワナナセ,ヒロカワナナセ',
-    '松田美里,1289,1289,2974,名詞,固有名詞,人名,一般,*,*,松田美里,マツダミリ,マツダミリ',
-    '三品瑠香,1289,1289,3921,名詞,固有名詞,人名,一般,*,*,三品瑠香,ミシナルカ,ミシナルカ',
-    '小玉梨々華,1289,1289,6278,名詞,固有名詞,人名,一般,*,*,小玉梨々華,コダマリリカ,コダマリリカ',
-    '坂元葉月,1289,1289,4776,名詞,固有名詞,人名,一般,*,*,坂元葉月,サカモトハヅキ,サカモトハズキ',
   ];
 
   custom.forEach((line) => {
@@ -83,9 +72,10 @@ const addCustomTokenInfo = (builder) => {
     dictPath: MECAB_IPADIC_DIRECTORY,
   });
 
+  console.log('MECAB_IPADIC_DIRECTORY:', MECAB_IPADIC_DIRECTORY)
 
   const ipaDic = new IPADIC(MECAB_IPADIC_DIRECTORY);
-  const builder = kuromoji.dictionaryBuilder();
+  const builder = new DictionaryBuilder();
 
   // Build token info dictionary
   const tokenInfoPromise = ipaDic.readTokenInfo((line) => {

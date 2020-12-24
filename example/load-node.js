@@ -15,12 +15,17 @@
  * limitations under the License.
  */
 
-const kuromoji = require('../src/kuromoji');
+const {
+  TokenizerBuilder,
+  NodeDictionaryLoader,
+} = require('../src/kuromoji');
 
 const DIC_DIR = 'dict';
 
 // Load dictionaries from file, and prepare tokenizer
-kuromoji.builder({ dicPath: DIC_DIR }).build().then((tokenizer) => {
+const loader = new NodeDictionaryLoader(DIC_DIR);
+const kuromoji = new TokenizerBuilder({ loader });
+kuromoji.build().then((tokenizer) => {
   const path = tokenizer.tokenize('すもももももももものうち');
   console.log(path);
   module.exports = tokenizer;

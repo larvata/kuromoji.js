@@ -19,14 +19,16 @@
 const TokenizerBuilder = require('./TokenizerBuilder');
 const DictionaryBuilder = require('./dict/builder/DictionaryBuilder');
 
-// Public methods
-const kuromoji = {
-  builder(option) {
-    return new TokenizerBuilder(option);
-  },
-  dictionaryBuilder() {
-    return new DictionaryBuilder();
-  },
-};
+const NodeDictionaryLoader = require('./loader/NodeDictionaryLoader');
+const BrowserDictionaryLoader = require('./loader/BrowserDictionaryLoader');
+const DictionaryLoaderBase = require('./loader/DictionaryLoaderBase');
 
-module.exports = kuromoji;
+// Public methods
+module.exports = {
+  TokenizerBuilder,
+  DictionaryBuilder,
+
+  NodeDictionaryLoader,
+  BrowserDictionaryLoader,
+  DictionaryLoaderBase,
+};

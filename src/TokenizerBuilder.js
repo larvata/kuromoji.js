@@ -17,26 +17,24 @@
 
 
 const Tokenizer = require('./Tokenizer');
-const DictionaryLoader = require('./loader/NodeDictionaryLoader');
-
 
 class TokenizerBuilder {
   /**
    * TokenizerBuilder create Tokenizer instance.
    * @param {Object} option JSON object which have key-value pairs settings
-   * @param {string} option.dicPath Dictionary directory path (or URL using in browser)
+   * @param {Object} option.loader custom loader which extends DictionaryLoaderBase
    * @constructor
    */
   constructor(option = {}) {
-    this.dic_path = option.dicPath || 'dict/';
+    this.loader = option.loader;
   }
 
   /**
    * Build Tokenizer instance by asynchronous manner
+   * @param {Object} option JSON object which have key-value pairs settings
    */
   build() {
-    const loader = new DictionaryLoader(this.dic_path);
-    return loader.load().then((dic) => new Tokenizer(dic));
+    return this.loader.load().then((dic) => new Tokenizer(dic));
   }
 }
 
