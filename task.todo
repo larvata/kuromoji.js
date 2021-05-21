@@ -1,0 +1,4 @@
+> npm install mirigana@kuromoji.js
+x > npx kumo download ipadic ipadic-neologd unidic-cwj unidic-csj jumandic
+> npx kumo use unidic
+x > npx kumo build unidic --user my-dic.txt

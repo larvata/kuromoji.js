@@ -29,14 +29,13 @@ class ConnectionCostsBuilder {
     this.connection_cost = null;
   }
 
-  putLine(line) {
+  put(costs) {
     if (this.lines === 0) {
-      const dimensions = line.split(' ');
-      const forward_dimension = dimensions[0];
-      const backward_dimension = dimensions[1];
+      // first data is the two-dimensional matrix def
+      const [forward_dimension, backward_dimension] = costs;
 
       if (forward_dimension < 0 || backward_dimension < 0) {
-        throw new Error('Parse error of matrix.def');
+        throw new Error('Parse error of matrix.bin/matrix.def');
       }
 
       this.connection_cost = new ConnectionCosts(forward_dimension, backward_dimension);
@@ -44,24 +43,26 @@ class ConnectionCostsBuilder {
       return this;
     }
 
-    const costs = line.split(' ');
-
     if (costs.length !== 3) {
       return this;
     }
 
-    const forward_id = parseInt(costs[0], 10);
-    const backward_id = parseInt(costs[1], 10);
-    const cost = parseInt(costs[2], 10);
-
-    if (forward_id < 0 || backward_id < 0 || !Number.isFinite(forward_id) || !Number.isFinite(backward_id) ||
-      this.connection_cost.forward_dimension <= forward_id || this.connection_cost.backward_dimension <= backward_id) {
+    const [forward_id, backward_id, cost] = costs;
+    if (forward_id < 0 || backward_id < 0
+      || this.connection_cost.forward_dimension <= forward_id
+      || this.connection_cost.backward_dimension <= backward_id) {
       throw new Error('Parse error of matrix.def');
     }
 
     this.connection_cost.put(forward_id, backward_id, cost);
     this.lines += 1;
     return this;
+  }
+
+  putLine(line) {
+    const costs = line.split(' ')
+      .map((c) => parseInt(c, 10));
+    this.put(costs);
   }
 
   build() {

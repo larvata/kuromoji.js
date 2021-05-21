@@ -53,11 +53,18 @@ class DictionaryBuilder {
   }
 
   /**
-   * Put one line of "matrix.def" file for building ConnectionCosts object
-   * @param {string} line is a line of "matrix.def"
+   * Put the single unit of matrix data for building the ConnectionCosts object
+   * When matrix.bin exists the data will be an costs array
+   * When matrix.def exists the data will be a single line of the matrix.def
+   * @param {string} data costs array from matrix.bin or a single line of matrix.def
+   * @param {bool} isLine indicate whether a line or a costs
    */
-  putCostMatrixLine(line) {
-    this.cc_builder.putLine(line);
+  putCostMatrix(data, isLine) {
+    if (isLine) {
+      this.cc_builder.putLine(data);
+    } else {
+      this.cc_builder.put(data);
+    }
     return this;
   }
 

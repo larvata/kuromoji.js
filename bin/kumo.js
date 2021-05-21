@@ -1,19 +1,28 @@
+#!/usr/bin/env node
+
 const fs = require('fs');
 const path = require('path');
-const IPADIC = require('mecab-ipadic-seed');
+const yargs = require('yargs/yargs');
+const { hideBin } = require('yargs/helpers');
+const {
+  // DictionaryPrepare,
+  MecabDictionaryReader,
+  SUPPORTED_DICTIONARIES,
+  UNPACK_DIRECTORY,
+} = require('mecab-ipadic-seed');
 const kuromoji = require('../src/kuromoji.js');
 
-const MECAB_IPADIC_DIRECTORY = '.cache/ipadic';
-const DICT_OUTPUT_DIRECTORY = 'dict';
+const { argv } = yargs(hideBin(process.argv))
+  .command('use [dict]');
 
-function createDirectorySync(dpath) {
-  if (!fs.existsSync(dpath)) {
-    fs.mkdirSync(dpath, { recursive: true });
-  }
+if (!SUPPORTED_DICTIONARIES.includes(argv.dict)) {
+  console.log('Following dictionary is not supported:');
+  console.log(argv.dict);
+  process.exit();
 }
 
-createDirectorySync(MECAB_IPADIC_DIRECTORY);
-createDirectorySync(DICT_OUTPUT_DIRECTORY);
+const DICT_OUTPUT_DIRECTORY = 'dict';
+
 
 // Convert Int32Array to Buffer
 function toBuffer(typed) {
@@ -53,63 +62,38 @@ const maskUslessFeatures = (line) => {
 };
 
 
-const addCustomTokenInfo = (builder) => {
-  const custom = [
-    '令和,1288,1288,8142,名詞,固有名詞,一般,*,*,*,令和,レイワ,レイワ',
-    '林愛夏,1289,1289,7251,名詞,固有名詞,人名,一般,*,*,林愛夏,ハヤシマナツ,ハヤシマナツ',
-    '大矢梨華子,1289,1289,6278,名詞,固有名詞,人名,一般,*,*,大矢梨華子,オオヤリカコ,オーヤリカコ',
-    '傳谷英里香,1289,1289,6278,名詞,固有名詞,人名,一般,*,*,傳谷英里香,デンヤエリカ,デンヤエリカ',
-    '高見奈央,1289,1289,4504,名詞,固有名詞,人名,一般,*,*,高見奈央,タカミナオ,タカミナオ',
-    '渡邊璃生,1289,1289,6024,名詞,固有名詞,人名,一般,*,*,渡邊璃生,ワタナベリオ,ワタナベリオ',
-    '西井万理那,1289,1289,6278,名詞,固有名詞,人名,一般,*,*,西井万理那,ニシイマリナ,ニシーマリナ',
-    '東理紗,1289,1289,7251,名詞,固有名詞,人名,一般,*,*,東理紗,アズマリサ,アズマリサ',
-    '廣川奈々聖,1289,1289,6278,名詞,固有名詞,人名,一般,*,*,廣川奈々聖,ヒロカワナナセ,ヒロカワナナセ',
-    '松田美里,1289,1289,2974,名詞,固有名詞,人名,一般,*,*,松田美里,マツダミリ,マツダミリ',
-    '三品瑠香,1289,1289,3921,名詞,固有名詞,人名,一般,*,*,三品瑠香,ミシナルカ,ミシナルカ',
-    '小玉梨々華,1289,1289,6278,名詞,固有名詞,人名,一般,*,*,小玉梨々華,コダマリリカ,コダマリリカ',
-    '坂元葉月,1289,1289,4776,名詞,固有名詞,人名,一般,*,*,坂元葉月,サカモトハヅキ,サカモトハズキ',
-  ];
-
-  custom.forEach((line) => {
-    builder.addTokenInfoDictionary(maskUslessFeatures(line));
-  });
-};
-
-
 (async () => {
   // download and patch the dictionaries
-  await IPADIC.prepareDictionaries({
-    neologd: false,
-    dictPath: MECAB_IPADIC_DIRECTORY,
+  await MecabDictionaryReader.prepareDictionaries({
+    dict: argv.dict,
   });
 
-
-  const ipaDic = new IPADIC(MECAB_IPADIC_DIRECTORY, ((files) => files.filter((filename) => /\.csv$/.test(filename))));
+  const mecab = new MecabDictionaryReader(UNPACK_DIRECTORY);
   const builder = kuromoji.dictionaryBuilder();
 
   // Build token info dictionary
-  const tokenInfoPromise = ipaDic.readTokenInfo((line) => {
+  const tokenInfoPromise = mecab.readTokenInfo((line) => {
     builder.addTokenInfoDictionary(maskUslessFeatures(line));
   }).then(() => {
     console.log('Finishied to read token info dics');
   });
 
   // Build connection costs matrix
-  const matrixDefPromise = ipaDic.readMatrixDef((line) => {
-    builder.putCostMatrixLine(line);
+  const matrixDefPromise = mecab.readMatrixDef((line, isLine) => {
+    builder.putCostMatrix(line, isLine);
   }).then(() => {
     console.log('Finishied to read matrix.def');
   });
 
   // Build unknown dictionary
-  const unkDefPromise = ipaDic.readUnkDef((line) => {
+  const unkDefPromise = mecab.readUnkDef((line) => {
     builder.putUnkDefLine(line);
   }).then(() => {
     console.log('Finishied to read unk.def');
   });
 
   // Build character definition dictionary
-  const charDefPromise = ipaDic.readCharDef((line) => {
+  const charDefPromise = mecab.readCharDef((line) => {
     builder.putCharDefLine(line);
   }).then(() => {
     console.log('Finishied to read char.def');
@@ -121,12 +105,6 @@ const addCustomTokenInfo = (builder) => {
     unkDefPromise,
     charDefPromise,
   ]);
-
-  addCustomTokenInfo(builder);
-
-  console.log('');
-  console.log('Finishied to read all seed dictionary files');
-  console.log('Building binary dictionary ...');
 
   const dic = await builder.build();
   const base_buffer = toBuffer(dic.trie.bc.getBaseBuffer());
@@ -155,5 +133,5 @@ const addCustomTokenInfo = (builder) => {
   fs.writeFileSync(path.join(DICT_OUTPUT_DIRECTORY, 'unk_compat.dat'), char_compat_map_buffer);
   fs.writeFileSync(path.join(DICT_OUTPUT_DIRECTORY, 'unk_invoke.dat'), invoke_definition_map_buffer);
 
-  console.log('Dict built from mecab-ipadic-seed done.');
+  console.log('Dict built done.');
 })();

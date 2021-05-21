@@ -53,7 +53,11 @@ class TokenInfoDictionary {
 
       // Assertion
       if (!Number.isFinite(+left_id) || !Number.isFinite(+right_id) || !Number.isFinite(+word_cost)) {
-        console.log(entry);
+        // invalid entry
+        // e.g.:
+        // "(‐c_,‐。)",10592,12455,-2205,補助記号,ＡＡ,顔文字,*,*,*,*,（‐ｃ＿，‐。）,（‐ｃ＿，‐。）,*,（‐ｃ＿，‐。）,*,記号,*,*,*,*,*,*,補助,*,*,*,*,*,*,*,77505133021372928,281962
+        console.log('Invalid entry:', entry);
+        return;
       }
 
       const token_info_id = this.put(left_id, right_id, word_cost, surface_form, feature);
